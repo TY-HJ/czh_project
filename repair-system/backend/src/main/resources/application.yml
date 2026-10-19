@@ -1,0 +1,31 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 请通过环境变量 DB_USERNAME / DB_PASSWORD 配置数据库账号
+    url: jdbc:mysql://localhost:3306/repair_system?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: ${DB_PASSWORD:}
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# JWT 配置(生产环境请更换密钥)
+jwt:
+  secret: ${JWT_SECRET:change-me-in-production}
+  expire-hours: 24
+
+# 图片上传保存目录(相对后端运行目录)
+upload:
+  dir: ./uploads

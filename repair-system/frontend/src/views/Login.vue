@@ -1,0 +1,68 @@
+<template>
+  <div class="login-page">
+    <el-card class="login-card">
+      <h2 class="title">🔧 报修工单管理系统</h2>
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="0" size="large">
+        <el-form-item prop="username">
+          <el-input v-model="form.username" placeholder="用户名" :prefix-icon="User" />
+        </el-form-item>
+        <el-form-item prop="password">
+          <el-input v-model="form.password" type="password" placeholder="密码" show-password
+                    :prefix-icon="Lock" @keyup.enter="submit" />
+        </el-form-item>
+        <el-button type="primary" style="width: 100%" :loading="loading" @click="submit">登 录</el-button>
+        <div class="tips">
+          还没有账号？<router-link to="/register">学生注册</router-link>
+        </div>
+      </el-form>
+    </el-card>
+  </div>
+</template>
+
+<script setup>
+import { reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { User, Lock } from '@element-plus/icons-vue'
+import { login } from '../api/auth'
+import { useUserStore } from '../stores/user'
+import { DEMO_ACCOUNTS } from '../config/demo'
+
+const router = useRouter()
+const store = useUserStore()
+const formRef = ref()
+const loading = ref(false)
+
+const form = reactive({ username: '', password: '' })
+const rules = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+}
+
+async function submit() {
+  await formRef.value.validate()
+  loading.value = true
+  try {
+    const data = await login(form)
+    store.setLogin(data)
+    ElMessage.success('登录成功')
+    // 按角色跳转对应首页,避免非管理员登录后落在仅 ADMIN 可访问的 /dashboard 形成守卫环路
+    router.push(DEMO_ACCOUNTS[data.role]?.home || '/my-orders')
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
+<style scoped>
+.login-page {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+.login-card { width: 400px; padding: 12px 8px; }
+.title { text-align: center; margin-bottom: 24px; color: #303133; }
+.tips { text-align: center; margin-top: 14px; color: #999; font-size: 13px; }
+</style>

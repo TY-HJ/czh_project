@@ -1,0 +1,97 @@
+<template>
+  <el-card>
+    <template #header><b>提交报修</b></template>
+    <el-form ref="formRef" :model="form" :rules="rules" label-width="100px" style="max-width: 640px">
+      <el-form-item label="报修类型" prop="typeId">
+        <el-select v-model="form.typeId" placeholder="请选择类型" style="width: 100%">
+          <el-option v-for="t in types" :key="t.id" :label="t.typeName" :value="t.id" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="位置" prop="locationId">
+        <el-select v-model="form.locationId" placeholder="请选择楼栋/房间" style="width: 100%">
+          <el-option v-for="l in locations" :key="l.id"
+                     :label="`${l.building} ${l.floor} ${l.room}`" :value="l.id" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="标题" prop="title">
+        <el-input v-model="form.title" maxlength="50" show-word-limit placeholder="一句话描述问题,如:卫生间水龙头漏水" />
+      </el-form-item>
+      <el-form-item label="详细描述">
+        <el-input v-model="form.description" type="textarea" :rows="4"
+                  placeholder="补充说明,如:什么时候开始的、影响了什么" />
+      </el-form-item>
+      <el-form-item label="紧急程度">
+        <el-radio-group v-model="form.priority">
+          <el-radio value="NORMAL">普通</el-radio>
+          <el-radio value="URGENT">紧急</el-radio>
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item label="现场照片">
+        <el-upload v-model:file-list="fileList" :action="uploadUrl" list-type="picture-card"
+                   :on-success="onUploadSuccess" :before-upload="beforeUpload" :limit="4" accept="image/*">
+          <el-icon><Plus /></el-icon>
+        </el-upload>
+        <div style="color: #999; font-size: 12px">最多4张,每张不超过10MB,有助于师傅提前判断问题</div>
+      </el-form-item>
+      <el-form-item>
+        <el-button type="primary" :loading="loading" @click="submit">提交报修</el-button>
+      </el-form-item>
+    </el-form>
+  </el-card>
+</template>
+
+<script setup>
+import { onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { createOrder, uploadUrl } from '../../api/order'
+import { getTypes, getLocations } from '../../api/user'
+
+const router = useRouter()
+const formRef = ref()
+const loading = ref(false)
+const types = ref([])
+const locations = ref([])
+const fileList = ref([])
+
+const form = reactive({
+  typeId: null, locationId: null, title: '',
+  description: '', priority: 'NORMAL', images: ''
+})
+const rules = {
+  typeId: [{ required: true, message: '请选择报修类型', trigger: 'change' }],
+  locationId: [{ required: true, message: '请选择位置', trigger: 'change' }],
+  title: [{ required: true, message: '请输入标题', trigger: 'blur' }]
+}
+
+onMounted(async () => {
+  types.value = await getTypes()
+  locations.value = await getLocations()
+})
+
+function beforeUpload(file) {
+  if (file.size > 10 * 1024 * 1024) {
+    ElMessage.error('图片不能超过10MB')
+    return false
+  }
+  return true
+}
+
+// 上传成功后 el-upload 会把响应对象当结果,取其中的 data(URL)
+function onUploadSuccess(res) {
+  const url = res.data
+  form.images = form.images ? form.images + ',' + url : url
+}
+
+async function submit() {
+  await formRef.value.validate()
+  loading.value = true
+  try {
+    await createOrder(form)
+    ElMessage.success('提交成功,请等待管理员派单')
+    router.push('/my-orders')
+  } finally {
+    loading.value = false
+  }
+}
+</script>
