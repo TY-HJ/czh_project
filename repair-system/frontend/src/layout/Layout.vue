@@ -2,7 +2,7 @@
   <el-container style="height: 100vh">
     <!-- 侧边菜单 -->
     <el-aside width="220px" style="background-color: #263445">
-      <div class="logo">🔧 报修工单系统</div>
+      <div class="logo">🏠 社区报修工单管理系统</div>
       <el-menu :default-active="$route.path" router background-color="#263445"
                text-color="#bfcbd9" active-text-color="#409EFF" style="border-right: none">
         <template v-for="item in menus" :key="item.path">
@@ -78,7 +78,7 @@ const unread = ref(0)
 let timer = null
 
 const roleName = computed(() =>
-  ({ ADMIN: '管理员', STUDENT: '学生', WORKER: '维修工' }[store.role] || store.role))
+  ({ ADMIN: '管理员', RESIDENT: '住户', WORKER: '维修工' }[store.role] || store.role))
 
 // 不同角色显示不同菜单
 const menus = computed(() => {
@@ -91,7 +91,7 @@ const menus = computed(() => {
       { path: '/notice-manage', title: '公告管理', icon: 'Bell' }
     ]
   }
-  if (store.role === 'STUDENT') {
+  if (store.role === 'RESIDENT') {
     return [
       { path: '/create-order', title: '提交报修', icon: 'EditPen' },
       { path: '/my-orders', title: '我的工单', icon: 'Tickets' }

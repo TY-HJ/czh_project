@@ -30,7 +30,7 @@ public class AuthController {
         return Result.ok(userService.login(dto.getUsername(), dto.getPassword()));
     }
 
-    /** 仅学生可自行注册,维修工/管理员由管理员在后台添加 */
+    /** 仅住户可自行注册,维修工/管理员由管理员在后台添加 */
     @PostMapping("/register")
     public Result<Void> register(@Valid @RequestBody RegisterDTO dto) {
         userService.register(dto);

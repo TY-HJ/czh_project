@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
- * 宿舍/社区报修工单管理系统 启动类
+ * 社区报修工单管理系统 启动类
  */
 @SpringBootApplication
 @EnableScheduling   // 开启定时任务(工单超时催办)

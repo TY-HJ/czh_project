@@ -11,6 +11,6 @@ public class Location {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String building;
-    private String floor;
+    private String unit;
     private String room;
 }

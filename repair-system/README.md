@@ -43,8 +43,8 @@
 mysql -uroot -p < sql/init.sql
 ```
 
-> 脚本会创建 `repair_system` 库、9张表、示例数据和测试账号。
-> 若 root 密码不是 123456，请修改 `backend/src/main/resources/application.yml` 中的 `spring.datasource.password`。
+> 脚本会创建 `repair_system` 库、示例数据和测试账号。
+> 数据库连接口令配置在 `backend/src/main/resources/application.yml`（本地为 root/1234，按需修改，请勿提交真实口令到仓库）。
 
 ### 2. 启动后端（端口 8080）
 
@@ -69,11 +69,13 @@ npm run dev
 | 账号 | 角色 | 说明 |
 |---|---|---|
 | `admin` | 管理员 | 派单、用户/字典/公告管理、统计大屏 |
-| `zhangsan` | 学生 | 提交报修、验收评价、催办 |
+| `zhangsan` | 住户 | 提交报修、验收评价、催办 |
 | `lisi` | 维修工 | 处理工单、填写处理说明 |
 | `wangwu` | 维修工 | 备用维修工（可演示派单给不同人） |
 
-**建议按此流程体验完整闭环**：学生提交报修 → 管理员派单给李师傅 → 李师傅完成维修 → 学生验收打分 → 管理员查看统计大屏。
+**快速启动（答辩演示）**：双击项目根目录的 `start-all.bat` 一键启动前后端并打开浏览器；也可分别双击 `start-backend.bat` / `start-frontend.bat`；重置演示数据双击 `reset-database.bat`。
+
+**建议按此流程体验完整闭环**：住户提交报修 → 管理员派单给李师傅 → 李师傅完成维修 → 住户验收打分 → 管理员查看统计大屏。
 
 ## 五、项目结构
 
@@ -122,15 +124,3 @@ repair-system/
 2. **前端登录后 403**：确认访问的是 `/api/**` 且后端已启动（vite 已配置代理）。
 3. **上传的图片在哪**：保存在后端运行目录的 `uploads/` 下，通过 `/uploads/文件名` 访问。
 4. **JWT 密钥**：生产环境请修改 `application.yml` 中的 `jwt.secret`。
-
-## 八、GitHub 备份说明
-
-本仓库中的 `backend/src/main/resources/application.yml` 已使用环境变量占位，未包含本地数据库口令。启动前请设置：
-
-```bash
-export DB_USERNAME=root
-export DB_PASSWORD=你的数据库密码
-export JWT_SECRET=你的JWT密钥
-```
-
-或直接在本地修改 `application.yml`（不要提交真实口令）。

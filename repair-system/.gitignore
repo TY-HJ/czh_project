@@ -1,7 +1,17 @@
+# ---- Java / Maven ----
+backend/target/
+*.class
+*.log
+
+# ---- Node / Vite ----
 frontend/node_modules/
 frontend/dist/
-backend/target/
+frontend/*.log
+
+# ---- 运行时数据 ----
 backend/uploads/
-*.log
+
+# ---- IDE ----
 .idea/
-.tools/
+*.iml
+.vscode/

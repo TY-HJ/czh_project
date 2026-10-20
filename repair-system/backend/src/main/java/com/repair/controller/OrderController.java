@@ -28,9 +28,9 @@ public class OrderController {
 
     private final OrderService orderService;
 
-    // ==================== 提交(学生) ====================
+    // ==================== 提交(住户) ====================
     @PostMapping
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasRole('RESIDENT')")
     public Result<Void> create(@Valid @RequestBody OrderCreateDTO dto, Authentication auth) {
         orderService.create((Long) auth.getPrincipal(), dto);
         return Result.ok();
@@ -38,7 +38,7 @@ public class OrderController {
 
     // ==================== 列表查询 ====================
     @GetMapping("/my")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasRole('RESIDENT')")
     public Result<Page<OrderVO>> my(@RequestParam(required = false) Integer status,
                                     @RequestParam(defaultValue = "1") long current,
                                     @RequestParam(defaultValue = "10") long size,
@@ -80,14 +80,14 @@ public class OrderController {
     }
 
     @PutMapping("/{id}/acceptance")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasRole('RESIDENT')")
     public Result<Void> acceptance(@PathVariable Long id, @Valid @RequestBody AcceptanceDTO dto, Authentication auth) {
         orderService.acceptance(id, (Long) auth.getPrincipal(), dto);
         return Result.ok();
     }
 
     @PutMapping("/{id}/cancel")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasRole('RESIDENT')")
     public Result<Void> cancel(@PathVariable Long id, Authentication auth) {
         orderService.cancel(id, (Long) auth.getPrincipal());
         return Result.ok();
@@ -103,7 +103,9 @@ public class OrderController {
     /** 催办(报修人或管理员) */
     @PutMapping("/{id}/urge")
     public Result<Void> urge(@PathVariable Long id, Authentication auth) {
-        orderService.urge(id, (Long) auth.getPrincipal());
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+        orderService.urge(id, (Long) auth.getPrincipal(), isAdmin);
         return Result.ok();
     }
 

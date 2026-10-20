@@ -5,7 +5,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.repair.common.BusinessException;
 import com.repair.dto.RegisterDTO;
 import com.repair.dto.UserDTO;
+import com.repair.entity.RepairOrder;
 import com.repair.entity.User;
+import com.repair.mapper.RepairOrderMapper;
 import com.repair.mapper.UserMapper;
 import com.repair.security.JwtUtil;
 import com.repair.vo.LoginVO;
@@ -24,6 +26,7 @@ import java.util.List;
 public class UserService {
 
     private final UserMapper userMapper;
+    private final RepairOrderMapper orderMapper;
     private final JwtUtil jwtUtil;
     private final BCryptPasswordEncoder passwordEncoder;
 
@@ -47,7 +50,7 @@ public class UserService {
         return vo;
     }
 
-    /** 学生自行注册 */
+    /** 住户自行注册 */
     public void register(RegisterDTO dto) {
         Long count = userMapper.selectCount(new LambdaQueryWrapper<User>()
                 .eq(User::getUsername, dto.getUsername()));
@@ -59,7 +62,7 @@ public class UserService {
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
         user.setRealName(dto.getRealName());
         user.setPhone(dto.getPhone());
-        user.setRole("STUDENT");
+        user.setRole("RESIDENT");
         user.setStatus(1);
         userMapper.insert(user);
     }
@@ -130,8 +133,11 @@ public class UserService {
         userMapper.updateById(user);
     }
 
-    /** 禁用/启用用户 */
-    public void toggleStatus(Long id) {
+    /** 禁用/启用用户(不允许操作当前登录账号自己) */
+    public void toggleStatus(Long id, Long currentUserId) {
+        if (id.equals(currentUserId)) {
+            throw new BusinessException("不能禁用当前登录账号");
+        }
         User user = userMapper.selectById(id);
         if (user == null) {
             throw new BusinessException("用户不存在");
@@ -140,8 +146,18 @@ public class UserService {
         userMapper.updateById(user);
     }
 
-    /** 删除用户(已被工单引用时不允许删,简单校验角色即可) */
-    public void delete(Long id) {
+    /** 删除用户:不允许删自己;已有工单关联的用户只能禁用不能删,防止工单/评价数据悬空 */
+    public void delete(Long id, Long currentUserId) {
+        if (id.equals(currentUserId)) {
+            throw new BusinessException("不能删除当前登录账号");
+        }
+        Long orderCount = orderMapper.selectCount(new LambdaQueryWrapper<RepairOrder>()
+                .eq(RepairOrder::getUserId, id)
+                .or()
+                .eq(RepairOrder::getWorkerId, id));
+        if (orderCount > 0) {
+            throw new BusinessException("该用户存在关联工单,不能删除,建议改为禁用");
+        }
         userMapper.deleteById(id);
     }
 }

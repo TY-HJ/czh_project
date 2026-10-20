@@ -20,6 +20,6 @@ public class UserDTO {
     private String phone;
 
     @NotBlank(message = "角色不能为空")
-    @Pattern(regexp = "STUDENT|WORKER|ADMIN", message = "角色不合法")
+    @Pattern(regexp = "RESIDENT|WORKER|ADMIN", message = "角色不合法")
     private String role;
 }

@@ -1,9 +1,12 @@
 package com.repair.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.repair.common.BusinessException;
 import com.repair.entity.Location;
+import com.repair.entity.RepairOrder;
 import com.repair.entity.RepairType;
 import com.repair.mapper.LocationMapper;
+import com.repair.mapper.RepairOrderMapper;
 import com.repair.mapper.RepairTypeMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,6 +22,7 @@ public class DictService {
 
     private final RepairTypeMapper typeMapper;
     private final LocationMapper locationMapper;
+    private final RepairOrderMapper orderMapper;
 
     // ---------- 报修类型 ----------
     public List<RepairType> listTypes() {
@@ -40,6 +44,11 @@ public class DictService {
     }
 
     public void deleteType(Long id) {
+        Long used = orderMapper.selectCount(new LambdaQueryWrapper<RepairOrder>()
+                .eq(RepairOrder::getTypeId, id));
+        if (used > 0) {
+            throw new BusinessException("该报修类型已被 " + used + " 张工单使用,不能删除");
+        }
         typeMapper.deleteById(id);
     }
 
@@ -63,6 +72,11 @@ public class DictService {
     }
 
     public void deleteLocation(Long id) {
+        Long used = orderMapper.selectCount(new LambdaQueryWrapper<RepairOrder>()
+                .eq(RepairOrder::getLocationId, id));
+        if (used > 0) {
+            throw new BusinessException("该位置已被 " + used + " 张工单使用,不能删除");
+        }
         locationMapper.deleteById(id);
     }
 }

@@ -16,7 +16,7 @@ public class User {
     private String password;
     private String realName;
     private String phone;
-    private String role;        // STUDENT / WORKER / ADMIN
+    private String role;        // RESIDENT(住户) / WORKER / ADMIN
     private String avatar;
     private Integer status;     // 1正常 0禁用
     private LocalDateTime createTime;

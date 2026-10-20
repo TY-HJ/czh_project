@@ -36,7 +36,7 @@
         <template #default="{ row }">
           <el-button size="small" @click="detailRef.open(row.id)">详情</el-button>
           <el-button v-if="row.status === 0" size="small" type="primary" @click="openAssign(row)">派单</el-button>
-          <el-button v-if="row.status === 1 || row.status === 2" size="small" type="warning" @click="urge(row)">催办</el-button>
+          <el-button v-if="row.status === 0 || row.status === 1" size="small" type="warning" @click="urge(row)">催办</el-button>
           <el-button v-if="row.status === 0 || row.status === 1 || row.status === 2" size="small" type="danger" plain @click="close(row)">关闭</el-button>
         </template>
       </el-table-column>

@@ -1,7 +1,7 @@
 <template>
   <div class="login-page">
     <el-card class="login-card">
-      <h2 class="title">🔧 报修工单管理系统</h2>
+      <h2 class="title">🏠 社区报修工单管理系统</h2>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="0" size="large">
         <el-form-item prop="username">
           <el-input v-model="form.username" placeholder="用户名" :prefix-icon="User" />
@@ -12,7 +12,7 @@
         </el-form-item>
         <el-button type="primary" style="width: 100%" :loading="loading" @click="submit">登 录</el-button>
         <div class="tips">
-          还没有账号？<router-link to="/register">学生注册</router-link>
+          还没有账号？<router-link to="/register">住户注册</router-link>
         </div>
       </el-form>
     </el-card>

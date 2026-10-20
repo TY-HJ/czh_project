@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * 学生提交报修DTO
+ * 住户提交报修DTO
  */
 @Data
 public class OrderCreateDTO {

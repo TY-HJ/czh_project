@@ -1,6 +1,7 @@
 package com.repair.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.repair.common.BusinessException;
 import com.repair.dto.AcceptanceDTO;
@@ -30,7 +31,7 @@ import java.util.stream.Collectors;
  * 状态流转图:
  *   [0 待派单] --管理员派单--> [1 处理中] --维修工完成--> [2 待验收]
  *        |                        ^    --验收不通过-退回---||
- *        |--学生撤销/管理员关闭--> [4 已关闭]        [2] --验收通过--> [3 已完成]
+ *        |--住户撤销/管理员关闭--> [4 已关闭]        [2] --验收通过--> [3 已完成]
  */
 @Service
 @RequiredArgsConstructor
@@ -46,7 +47,7 @@ public class OrderService {
 
     private static final DateTimeFormatter NO_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
-    // ==================== 学生:提交报修 ====================
+    // ==================== 住户:提交报修 ====================
     @Transactional
     public void create(Long userId, OrderCreateDTO dto) {
         RepairOrder order = new RepairOrder();
@@ -112,7 +113,7 @@ public class OrderService {
         sendMessage(order.getUserId(), "您的报修【" + order.getOrderNo() + "】已维修完成,请及时验收");
     }
 
-    // ==================== 学生:验收(通过/不通过) ====================
+    // ==================== 住户:验收(通过/不通过) ====================
     @Transactional
     public void acceptance(Long orderId, Long userId, AcceptanceDTO dto) {
         RepairOrder order = getOrder(orderId);
@@ -141,9 +142,11 @@ public class OrderService {
             }
         } else {
             // 验收不通过:退回处理中,维修工需重新处理
-            order.setStatus(RepairOrder.STATUS_PROCESSING);
-            order.setFinishTime(null);
-            orderMapper.updateById(order);
+            // 注意: MyBatis-Plus 的 updateById 默认忽略 null 字段,清空完成时间必须用 UpdateWrapper 显式 set null
+            orderMapper.update(null, new LambdaUpdateWrapper<RepairOrder>()
+                    .eq(RepairOrder::getId, orderId)
+                    .set(RepairOrder::getStatus, RepairOrder.STATUS_PROCESSING)
+                    .set(RepairOrder::getFinishTime, null));
 
             addLog(orderId, userId, OrderLog.ACTION_REJECT,
                     "验收不通过:" + (StringUtils.hasText(dto.getContent()) ? dto.getContent() : "未说明原因"));
@@ -153,7 +156,7 @@ public class OrderService {
         }
     }
 
-    // ==================== 学生:撤销(仅待派单可撤) ====================
+    // ==================== 住户:撤销(仅待派单可撤) ====================
     @Transactional
     public void cancel(Long orderId, Long userId) {
         RepairOrder order = getOrder(orderId);
@@ -179,11 +182,15 @@ public class OrderService {
 
     // ==================== 催办 ====================
     @Transactional
-    public void urge(Long orderId, Long userId) {
+    public void urge(Long orderId, Long userId, boolean isAdmin) {
         RepairOrder order = getOrder(orderId);
         if (order.getStatus() != RepairOrder.STATUS_PENDING_DISPATCH
                 && order.getStatus() != RepairOrder.STATUS_PROCESSING) {
             throw new BusinessException("工单当前状态无需催办");
+        }
+        // 归属校验:仅报修人或管理员可催办
+        if (!isAdmin && !order.getUserId().equals(userId)) {
+            throw new BusinessException("只有报修人或管理员才能催办");
         }
         order.setUrgeCount(order.getUrgeCount() + 1);
         orderMapper.updateById(order);
@@ -197,7 +204,7 @@ public class OrderService {
 
     // ==================== 查询 ====================
 
-    /** 学生的工单列表 */
+    /** 住户的工单列表 */
     public Page<OrderVO> myOrders(Long userId, Integer status, long current, long size) {
         LambdaQueryWrapper<RepairOrder> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(RepairOrder::getUserId, userId);
@@ -374,7 +381,7 @@ public class OrderService {
         }
         Location loc = locationMapper.selectById(order.getLocationId());
         if (loc != null) {
-            vo.setLocationText(loc.getBuilding() + " " + loc.getFloor() + " " + loc.getRoom());
+            vo.setLocationText(loc.getBuilding() + " " + loc.getUnit() + " " + loc.getRoom());
         }
         Evaluation evaluation = evaluationMapper.selectOne(new LambdaQueryWrapper<Evaluation>()
                 .eq(Evaluation::getOrderId, order.getId()).last("LIMIT 1"));

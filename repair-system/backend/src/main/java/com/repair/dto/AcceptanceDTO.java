@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * 学生验收DTO:pass=true 必须打分;pass=false 填不通过原因
+ * 住户验收DTO:pass=true 必须打分;pass=false 填不通过原因
  */
 @Data
 public class AcceptanceDTO {

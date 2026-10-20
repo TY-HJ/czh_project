@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * 注册DTO(仅学生可自行注册,维修工/管理员由管理员添加)
+ * 注册DTO(仅住户可自行注册,维修工/管理员由管理员添加)
  */
 @Data
 public class RegisterDTO {

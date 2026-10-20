@@ -19,9 +19,9 @@ const routes = [
       { path: 'user-manage', component: () => import('../views/admin/UserManage.vue'), meta: { roles: ['ADMIN'], title: '用户管理' } },
       { path: 'dict-manage', component: () => import('../views/admin/DictManage.vue'), meta: { roles: ['ADMIN'], title: '字典管理' } },
       { path: 'notice-manage', component: () => import('../views/admin/NoticeManage.vue'), meta: { roles: ['ADMIN'], title: '公告管理' } },
-      // 学生
-      { path: 'create-order', component: () => import('../views/student/CreateOrder.vue'), meta: { roles: ['STUDENT'], title: '提交报修' } },
-      { path: 'my-orders', component: () => import('../views/student/MyOrders.vue'), meta: { roles: ['STUDENT'], title: '我的工单' } },
+      // 住户
+      { path: 'create-order', component: () => import('../views/resident/CreateOrder.vue'), meta: { roles: ['RESIDENT'], title: '提交报修' } },
+      { path: 'my-orders', component: () => import('../views/resident/MyOrders.vue'), meta: { roles: ['RESIDENT'], title: '我的工单' } },
       // 维修工
       { path: 'task-list', component: () => import('../views/worker/TaskList.vue'), meta: { roles: ['WORKER'], title: '维修任务' } },
       // 公共

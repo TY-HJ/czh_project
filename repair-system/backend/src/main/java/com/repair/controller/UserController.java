@@ -8,6 +8,7 @@ import com.repair.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -51,14 +52,14 @@ public class UserController {
     }
 
     @PutMapping("/{id}/toggle-status")
-    public Result<Void> toggleStatus(@PathVariable Long id) {
-        userService.toggleStatus(id);
+    public Result<Void> toggleStatus(@PathVariable Long id, Authentication auth) {
+        userService.toggleStatus(id, (Long) auth.getPrincipal());
         return Result.ok();
     }
 
     @DeleteMapping("/{id}")
-    public Result<Void> delete(@PathVariable Long id) {
-        userService.delete(id);
+    public Result<Void> delete(@PathVariable Long id, Authentication auth) {
+        userService.delete(id, (Long) auth.getPrincipal());
         return Result.ok();
     }
 }

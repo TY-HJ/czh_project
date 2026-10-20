@@ -1,6 +1,6 @@
 import request from '../utils/request'
 
-// 学生
+// 住户
 export const createOrder = data => request.post('/orders', data)
 export const getMyOrders = params => request.get('/orders/my', { params })
 export const acceptOrder = (id, data) => request.put(`/orders/${id}/acceptance`, data)

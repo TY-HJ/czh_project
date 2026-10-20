@@ -28,7 +28,7 @@
           <template #header><b>说明</b></template>
           <el-descriptions :column="1">
             <el-descriptions-item label="平均处理时长">{{ overview.avgDurationHours ?? '-' }} 小时(从提交到维修完成)</el-descriptions-item>
-            <el-descriptions-item label="评分说明">评分为学生验收时的1~5星打分平均值</el-descriptions-item>
+            <el-descriptions-item label="评分说明">评分为住户验收时的1~5星打分平均值</el-descriptions-item>
             <el-descriptions-item label="超时提醒">待派单超24小时 / 处理中超48小时,系统自动发消息催办</el-descriptions-item>
           </el-descriptions>
         </el-card>

@@ -4,10 +4,10 @@ server:
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # 请通过环境变量 DB_USERNAME / DB_PASSWORD 配置数据库账号
+    # 按需修改用户名/密码(当前为 root/1234)
     url: jdbc:mysql://localhost:3306/repair_system?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: root
-    password: ${DB_PASSWORD:}
+    password: "1234"
   servlet:
     multipart:
       max-file-size: 10MB
@@ -23,7 +23,7 @@ mybatis-plus:
 
 # JWT 配置(生产环境请更换密钥)
 jwt:
-  secret: ${JWT_SECRET:change-me-in-production}
+  secret: RepairSystemJwtSecretKey-PleaseChangeMe-2026
   expire-hours: 24
 
 # 图片上传保存目录(相对后端运行目录)

@@ -10,7 +10,7 @@
 export const DEMO_KEY = 'demo-mode'
 
 export const DEMO_ACCOUNTS = {
-  STUDENT: { username: 'zhangsan', password: '123456', label: '学生（张三）', home: '/create-order' },
+  RESIDENT: { username: 'zhangsan', password: '123456', label: '住户（张三）', home: '/create-order' },
   WORKER: { username: 'lisi', password: '123456', label: '维修工（李师傅）', home: '/task-list' },
   ADMIN: { username: 'admin', password: '123456', label: '管理员', home: '/dashboard' }
 }

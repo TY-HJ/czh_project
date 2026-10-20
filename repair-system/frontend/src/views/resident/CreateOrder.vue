@@ -10,7 +10,7 @@
       <el-form-item label="位置" prop="locationId">
         <el-select v-model="form.locationId" placeholder="请选择楼栋/房间" style="width: 100%">
           <el-option v-for="l in locations" :key="l.id"
-                     :label="`${l.building} ${l.floor} ${l.room}`" :value="l.id" />
+                     :label="`${l.building} ${l.unit} ${l.room}`" :value="l.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="标题" prop="title">
@@ -27,8 +27,10 @@
         </el-radio-group>
       </el-form-item>
       <el-form-item label="现场照片">
-        <el-upload v-model:file-list="fileList" :action="uploadUrl" list-type="picture-card"
-                   :on-success="onUploadSuccess" :before-upload="beforeUpload" :limit="4" accept="image/*">
+        <el-upload v-model:file-list="fileList" :action="uploadUrl" :headers="uploadHeaders"
+                   list-type="picture-card"
+                   :on-success="onUploadSuccess" :on-error="onUploadError" :before-upload="beforeUpload"
+                   :limit="4" accept="image/*">
           <el-icon><Plus /></el-icon>
         </el-upload>
         <div style="color: #999; font-size: 12px">最多4张,每张不超过10MB,有助于师傅提前判断问题</div>
@@ -41,7 +43,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { createOrder, uploadUrl } from '../../api/order'
@@ -58,6 +60,9 @@ const form = reactive({
   typeId: null, locationId: null, title: '',
   description: '', priority: 'NORMAL', images: ''
 })
+
+// el-upload 直传不走 axios 拦截器,必须手动携带 JWT,否则后端 401
+const uploadHeaders = computed(() => ({ Authorization: 'Bearer ' + localStorage.getItem('token') }))
 const rules = {
   typeId: [{ required: true, message: '请选择报修类型', trigger: 'change' }],
   locationId: [{ required: true, message: '请选择位置', trigger: 'change' }],
@@ -81,6 +86,10 @@ function beforeUpload(file) {
 function onUploadSuccess(res) {
   const url = res.data
   form.images = form.images ? form.images + ',' + url : url
+}
+
+function onUploadError() {
+  ElMessage.error('图片上传失败,请重试')
 }
 
 async function submit() {

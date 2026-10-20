@@ -27,13 +27,13 @@
       <el-card>
         <template #header>
           <div style="display: flex; justify-content: space-between; align-items: center">
-            <b>位置(楼栋/楼层/房间)</b>
+            <b>位置(楼栋/单元/房间)</b>
             <el-button type="primary" size="small" @click="openLocation(null)">新增位置</el-button>
           </div>
         </template>
         <el-table :data="locations">
           <el-table-column prop="building" label="楼栋" />
-          <el-table-column prop="floor" label="楼层" />
+          <el-table-column prop="unit" label="单元" />
           <el-table-column prop="room" label="房间" />
           <el-table-column label="操作" width="140">
             <template #default="{ row }">
@@ -62,7 +62,7 @@
   <el-dialog v-model="locationVisible" :title="locationForm.id ? '编辑位置' : '新增位置'" width="400px">
     <el-form :model="locationForm" label-width="60px">
       <el-form-item label="楼栋"><el-input v-model="locationForm.building" placeholder="如:3号楼" /></el-form-item>
-      <el-form-item label="楼层"><el-input v-model="locationForm.floor" placeholder="如:2层" /></el-form-item>
+      <el-form-item label="单元"><el-input v-model="locationForm.unit" placeholder="如:2单元" /></el-form-item>
       <el-form-item label="房间"><el-input v-model="locationForm.room" placeholder="如:205" /></el-form-item>
     </el-form>
     <template #footer>
@@ -82,7 +82,7 @@ const locations = ref([])
 const typeVisible = ref(false)
 const locationVisible = ref(false)
 const typeForm = reactive({ id: null, typeName: '', sort: 0 })
-const locationForm = reactive({ id: null, building: '', floor: '', room: '' })
+const locationForm = reactive({ id: null, building: '', unit: '', room: '' })
 
 async function load() {
   types.value = await getTypes()
@@ -114,7 +114,7 @@ async function removeType(row) {
 function openLocation(row) {
   locationForm.id = row?.id ?? null
   locationForm.building = row?.building ?? ''
-  locationForm.floor = row?.floor ?? ''
+  locationForm.unit = row?.unit ?? ''
   locationForm.room = row?.room ?? ''
   locationVisible.value = true
 }
@@ -129,7 +129,7 @@ async function submitLocation() {
 }
 
 async function removeLocation(row) {
-  await ElMessageBox.confirm(`确定删除位置「${row.building} ${row.floor} ${row.room}」吗?`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(`确定删除位置「${row.building} ${row.unit} ${row.room}」吗?`, '提示', { type: 'warning' })
   await deleteLocation(row.id)
   load()
 }

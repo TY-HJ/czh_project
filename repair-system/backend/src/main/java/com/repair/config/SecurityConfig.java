@@ -35,6 +35,9 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                     .requestMatchers("/api/auth/login", "/api/auth/register", "/uploads/**").permitAll()
                     .anyRequest().authenticated())
+            // 未登录/token过期统一返回401,前端据此跳转登录页(默认是403,会被前端当成"无权限")
+            .exceptionHandling(ex -> ex.authenticationEntryPoint(
+                    (request, response, e) -> response.sendError(401)))
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
