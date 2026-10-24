@@ -1,7 +1,7 @@
 import request from '../utils/request'
 
 // 消息
-export const getMessages = () => request.get('/messages')
+export const getMessages = params => request.get('/messages', { params })
 export const getUnreadCount = () => request.get('/messages/unread-count')
 export const readAllMessages = () => request.put('/messages/read-all')
 export const readMessage = id => request.put(`/messages/${id}/read`)

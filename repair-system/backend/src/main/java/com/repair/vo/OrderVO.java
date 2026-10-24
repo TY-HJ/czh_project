@@ -29,6 +29,10 @@ public class OrderVO {
     private String priority;
     private Integer urgeCount;
     private String handleNote;
+    private String dispatchType;      // AUTO-智能派单 MANUAL-手动派单
+    private java.math.BigDecimal dispatchScore; // 派单时综合得分
+    private Integer reassignCount;    // 自动改派次数
+    private LocalDateTime workerAcceptTime; // 维修工接单时间
     private LocalDateTime submitTime;
     private LocalDateTime assignTime;
     private LocalDateTime finishTime;

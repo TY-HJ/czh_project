@@ -35,6 +35,12 @@ public class RepairOrder {
     private String priority;    // NORMAL / URGENT
     private Integer urgeCount;
     private String handleNote;
+    private String dispatchType;    // AUTO-智能派单 MANUAL-手动派单
+    private java.math.BigDecimal dispatchScore; // 派单时Top1综合得分
+    private String scoreDetail;     // TopN候选人得分明细JSON
+    private Integer reassignCount;  // 自动改派次数
+    private String triedWorkers;    // 已尝试维修工ID,逗号分隔
+    private LocalDateTime workerAcceptTime; // 维修工接单确认时间
     private LocalDateTime submitTime;
     private LocalDateTime assignTime;
     private LocalDateTime finishTime;

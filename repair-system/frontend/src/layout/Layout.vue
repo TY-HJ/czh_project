@@ -19,28 +19,16 @@
       <el-header class="header">
         <div class="title">{{ $route.meta.title || '首页' }}</div>
         <div class="right">
-          <el-dropdown v-if="demoOn" @command="handleDemoSwitch">
-            <el-button text type="warning">
-              <el-icon><Switch /></el-icon> 演示切换
-              <el-icon><ArrowDown /></el-icon>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item v-for="(acc, role) in DEMO_ACCOUNTS" :key="role"
-                                  :command="role" :disabled="role === store.role">
-                  {{ acc.label }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
           <el-badge :value="unread > 0 ? unread : ''" class="msg-badge">
             <el-button text @click="$router.push('/messages')">
               <el-icon><Bell /></el-icon> 消息
             </el-button>
           </el-badge>
-          <el-button text @click="$router.push('/notices')">
-            <el-icon><Document /></el-icon> 公告
-          </el-button>
+          <el-badge is-dot :hidden="!noticeNew" class="msg-badge">
+            <el-button text @click="$router.push('/notices')">
+              <el-icon><Document /></el-icon> 公告
+            </el-button>
+          </el-badge>
           <el-dropdown @command="handleCommand">
             <span class="user-info">
               <el-icon><User /></el-icon>
@@ -65,22 +53,22 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { getUnreadCount } from '../api/common'
-import { login } from '../api/auth'
-import { DEMO_ACCOUNTS, isDemoEnabled } from '../config/demo'
+import { getUnreadCount, getNoticePage } from '../api/common'
 
 const store = useUserStore()
 const router = useRouter()
+const route = useRoute()
 const unread = ref(0)
+const noticeNew = ref(false)
 let timer = null
+let noticeTimer = null
 
 const roleName = computed(() =>
   ({ ADMIN: '管理员', RESIDENT: '住户', WORKER: '维修工' }[store.role] || store.role))
 
-// 不同角色显示不同菜单
+// 不同角色显示不同菜单(基本功能列清楚,消息/公告提为菜单项,避免藏在顶栏图标里不直观)
 const menus = computed(() => {
   if (store.role === 'ADMIN') {
     return [
@@ -88,17 +76,24 @@ const menus = computed(() => {
       { path: '/order-manage', title: '工单管理', icon: 'Tickets' },
       { path: '/user-manage', title: '用户管理', icon: 'User' },
       { path: '/dict-manage', title: '字典管理', icon: 'Menu' },
-      { path: '/notice-manage', title: '公告管理', icon: 'Bell' }
+      { path: '/notice-manage', title: '公告管理', icon: 'Bell' },
+      { path: '/messages', title: '消息中心', icon: 'ChatDotRound' }
     ]
   }
   if (store.role === 'RESIDENT') {
     return [
       { path: '/create-order', title: '提交报修', icon: 'EditPen' },
-      { path: '/my-orders', title: '我的工单', icon: 'Tickets' }
+      { path: '/my-orders', title: '我的报修', icon: 'Tickets' },
+      { path: '/messages', title: '消息中心', icon: 'ChatDotRound' },
+      { path: '/notices', title: '公告列表', icon: 'Document' }
     ]
   }
   if (store.role === 'WORKER') {
-    return [{ path: '/task-list', title: '维修任务', icon: 'Tools' }]
+    return [
+      { path: '/task-list', title: '维修任务', icon: 'Tools' },
+      { path: '/messages', title: '消息中心', icon: 'ChatDotRound' },
+      { path: '/notices', title: '公告列表', icon: 'Document' }
+    ]
   }
   return []
 })
@@ -110,23 +105,6 @@ function handleCommand(cmd) {
   }
 }
 
-// ===== 演示模式:一键切换角色 =====
-const demoOn = ref(isDemoEnabled())
-
-async function handleDemoSwitch(role) {
-  const acc = DEMO_ACCOUNTS[role]
-  if (!acc || role === store.role) return
-  try {
-    // 先用新账号登录成功后才覆盖当前会话,失败时保持原会话不变(错误提示由 request.js 统一弹出)
-    const data = await login({ username: acc.username, password: acc.password })
-    store.setLogin(data)
-    unread.value = 0
-    refreshUnread()
-    await router.push(acc.home)
-    ElMessage.success(`已切换到${acc.label}视图`)
-  } catch (e) { /* 保持原会话 */ }
-}
-
 // 每30秒轮询未读消息数
 async function refreshUnread() {
   try {
@@ -134,11 +112,34 @@ async function refreshUnread() {
   } catch (e) { /* 静默 */ }
 }
 
+// 公告新内容红点: 对比最新公告时间与本地"最近已看公告"时间
+// 用户打开公告列表时, NoticeList 会把最新公告时间写入 localStorage 并广播 notice-seen 事件
+async function refreshNotice() {
+  if (route.path === '/notices') return
+  try {
+    const page = await getNoticePage({ current: 1, size: 1 })
+    const latest = page.records && page.records[0]
+    const seen = localStorage.getItem('noticeSeenAt')
+    noticeNew.value = !!latest && (!seen || latest.createTime > seen)
+  } catch (e) { /* 静默 */ }
+}
+
+function onNoticeSeen() {
+  noticeNew.value = false
+}
+
 onMounted(() => {
   refreshUnread()
+  refreshNotice()
   timer = setInterval(refreshUnread, 30000)
+  noticeTimer = setInterval(refreshNotice, 60000)
+  window.addEventListener('notice-seen', onNoticeSeen)
 })
-onUnmounted(() => clearInterval(timer))
+onUnmounted(() => {
+  clearInterval(timer)
+  clearInterval(noticeTimer)
+  window.removeEventListener('notice-seen', onNoticeSeen)
+})
 </script>
 
 <style scoped>

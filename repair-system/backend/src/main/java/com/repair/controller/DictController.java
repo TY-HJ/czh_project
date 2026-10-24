@@ -1,5 +1,6 @@
 package com.repair.controller;
 
+import com.repair.audit.AuditLog;
 import com.repair.common.Result;
 import com.repair.entity.Location;
 import com.repair.entity.RepairType;
@@ -28,6 +29,7 @@ public class DictController {
 
     @PostMapping("/types")
     @PreAuthorize("hasRole('ADMIN')")
+    @AuditLog(module = "字典管理", action = "新增报修类型")
     public Result<Void> addType(@RequestBody RepairType type) {
         dictService.addType(type);
         return Result.ok();
@@ -35,6 +37,7 @@ public class DictController {
 
     @PutMapping("/types")
     @PreAuthorize("hasRole('ADMIN')")
+    @AuditLog(module = "字典管理", action = "修改报修类型")
     public Result<Void> updateType(@RequestBody RepairType type) {
         dictService.updateType(type);
         return Result.ok();
@@ -42,6 +45,7 @@ public class DictController {
 
     @DeleteMapping("/types/{id}")
     @PreAuthorize("hasRole('ADMIN')")
+    @AuditLog(module = "字典管理", action = "删除报修类型")
     public Result<Void> deleteType(@PathVariable Long id) {
         dictService.deleteType(id);
         return Result.ok();
@@ -55,6 +59,7 @@ public class DictController {
 
     @PostMapping("/locations")
     @PreAuthorize("hasRole('ADMIN')")
+    @AuditLog(module = "字典管理", action = "新增位置")
     public Result<Void> addLocation(@RequestBody Location location) {
         dictService.addLocation(location);
         return Result.ok();
@@ -62,6 +67,7 @@ public class DictController {
 
     @PutMapping("/locations")
     @PreAuthorize("hasRole('ADMIN')")
+    @AuditLog(module = "字典管理", action = "修改位置")
     public Result<Void> updateLocation(@RequestBody Location location) {
         dictService.updateLocation(location);
         return Result.ok();
@@ -69,6 +75,7 @@ public class DictController {
 
     @DeleteMapping("/locations/{id}")
     @PreAuthorize("hasRole('ADMIN')")
+    @AuditLog(module = "字典管理", action = "删除位置")
     public Result<Void> deleteLocation(@PathVariable Long id) {
         dictService.deleteLocation(id);
         return Result.ok();

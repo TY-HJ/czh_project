@@ -1,6 +1,7 @@
 package com.repair.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.repair.audit.AuditLog;
 import com.repair.common.Result;
 import com.repair.entity.Notice;
 import com.repair.service.NoticeService;
@@ -27,6 +28,7 @@ public class NoticeController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
+    @AuditLog(module = "公告管理", action = "发布公告")
     public Result<Void> add(@RequestBody Notice notice, Authentication auth) {
         noticeService.add(notice, (Long) auth.getPrincipal());
         return Result.ok();
@@ -34,6 +36,7 @@ public class NoticeController {
 
     @PutMapping
     @PreAuthorize("hasRole('ADMIN')")
+    @AuditLog(module = "公告管理", action = "修改公告")
     public Result<Void> update(@RequestBody Notice notice) {
         noticeService.update(notice);
         return Result.ok();
@@ -41,6 +44,7 @@ public class NoticeController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
+    @AuditLog(module = "公告管理", action = "删除公告")
     public Result<Void> delete(@PathVariable Long id) {
         noticeService.delete(id);
         return Result.ok();

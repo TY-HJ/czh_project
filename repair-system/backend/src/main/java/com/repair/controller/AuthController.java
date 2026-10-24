@@ -26,6 +26,7 @@ public class AuthController {
     private final UserMapper userMapper;
 
     @PostMapping("/login")
+    @com.repair.audit.AuditLog(module = "认证", action = "登录")
     public Result<LoginVO> login(@Valid @RequestBody LoginDTO dto) {
         return Result.ok(userService.login(dto.getUsername(), dto.getPassword()));
     }

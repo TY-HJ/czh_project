@@ -26,7 +26,6 @@ import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import { login } from '../api/auth'
 import { useUserStore } from '../stores/user'
-import { DEMO_ACCOUNTS } from '../config/demo'
 
 const router = useRouter()
 const store = useUserStore()
@@ -39,6 +38,9 @@ const rules = {
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 }
 
+// 登录成功后按角色跳转对应首页
+const HOME_BY_ROLE = { ADMIN: '/dashboard', RESIDENT: '/create-order', WORKER: '/task-list' }
+
 async function submit() {
   await formRef.value.validate()
   loading.value = true
@@ -46,8 +48,7 @@ async function submit() {
     const data = await login(form)
     store.setLogin(data)
     ElMessage.success('登录成功')
-    // 按角色跳转对应首页,避免非管理员登录后落在仅 ADMIN 可访问的 /dashboard 形成守卫环路
-    router.push(DEMO_ACCOUNTS[data.role]?.home || '/my-orders')
+    router.push(HOME_BY_ROLE[data.role] || '/my-orders')
   } finally {
     loading.value = false
   }

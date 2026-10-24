@@ -38,4 +38,16 @@ public class StatsController {
     public Result<java.util.List<java.util.Map<String, Object>>> workerRanking() {
         return Result.ok(statsService.workerRanking());
     }
+
+    /** 楼栋×单元报修热力数据(S12) */
+    @GetMapping("/heatmap")
+    public Result<java.util.List<java.util.Map<String, Object>>> heatmap() {
+        return Result.ok(statsService.heatmap());
+    }
+
+    /** 月度趋势环比预警 + 高发类型预警(S12) */
+    @GetMapping("/trend-warning")
+    public Result<java.util.Map<String, Object>> trendWarning() {
+        return Result.ok(statsService.trendWarning());
+    }
 }

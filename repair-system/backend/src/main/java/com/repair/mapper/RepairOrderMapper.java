@@ -22,4 +22,10 @@ public interface RepairOrderMapper extends BaseMapper<RepairOrder> {
             "FROM repair_order WHERE submit_time >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH) " +
             "GROUP BY month ORDER BY month")
     List<Map<String, Object>> statMonthlyTrend();
+
+    /** 楼栋×单元报修热力数据(S12大屏) */
+    @Select("SELECT l.building AS building, l.unit AS unit, COUNT(*) AS count " +
+            "FROM repair_order o JOIN location l ON o.location_id = l.id " +
+            "GROUP BY l.building, l.unit ORDER BY l.building, l.unit")
+    List<Map<String, Object>> statBuildingHeatmap();
 }

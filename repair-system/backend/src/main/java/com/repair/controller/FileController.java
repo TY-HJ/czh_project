@@ -37,10 +37,8 @@ public class FileController {
         if (!ext.matches("\\.(jpg|jpeg|png|gif|webp|bmp)$")) {
             throw new BusinessException("只支持上传图片文件");
         }
-        File dir = new File(uploadDir);
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
+        // 解析为绝对路径并自动建目录(S9: 修复相对路径工作目录漂移问题)
+        File dir = com.repair.config.WebConfig.resolveUploadDir(uploadDir);
         String filename = UUID.randomUUID().toString().replace("-", "") + ext;
         try {
             file.transferTo(new File(dir, filename));

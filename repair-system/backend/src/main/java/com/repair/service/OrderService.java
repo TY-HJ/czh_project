@@ -44,14 +44,14 @@ public class OrderService {
     private final RepairTypeMapper typeMapper;
     private final LocationMapper locationMapper;
     private final MessageMapper messageMapper;
+    private final DispatchService dispatchService;
 
     private static final DateTimeFormatter NO_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     // ==================== 住户:提交报修 ====================
     @Transactional
-    public void create(Long userId, OrderCreateDTO dto) {
+    public OrderVO create(Long userId, OrderCreateDTO dto) {
         RepairOrder order = new RepairOrder();
-        order.setOrderNo(generateOrderNo());
         order.setUserId(userId);
         order.setTypeId(dto.getTypeId());
         order.setLocationId(dto.getLocationId());
@@ -61,22 +61,46 @@ public class OrderService {
         order.setStatus(RepairOrder.STATUS_PENDING_DISPATCH);
         order.setPriority(StringUtils.hasText(dto.getPriority()) ? dto.getPriority() : "NORMAL");
         order.setUrgeCount(0);
-        orderMapper.insert(order);
+        order.setReassignCount(0);
+        insertWithOrderNo(order);   // 工单号并发防重
 
         addLog(order.getId(), userId, OrderLog.ACTION_SUBMIT, "提交报修");
-        // 通知所有管理员有新工单
-        notifyRole("ADMIN", "新报修工单【" + order.getOrderNo() + "】" + order.getTitle() + ",请及时派单");
+        // 提交成功后立即触发智能派单(V2.0): 开关关闭/无匹配时由 DispatchService 转人工通知管理员
+        dispatchService.autoDispatch(order.getId());
+        // 返回提交结果(含自动派单去向), 前端据此给出准确反馈
+        return toVO(orderMapper.selectById(order.getId()));
     }
 
-    /** 工单号规则: yyyyMMdd + 当天第几个(4位) */
-    private String generateOrderNo() {
+    /** 生成工单号并插入; 撞唯一约束(并发提交)时最多重试3次 */
+    private void insertWithOrderNo(RepairOrder order) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            order.setId(null);
+            order.setOrderNo(nextOrderNo());
+            try {
+                orderMapper.insert(order);
+                return;
+            } catch (org.springframework.dao.DuplicateKeyException e) {
+                // 并发重号: 重新取号再试
+            }
+        }
+        throw new BusinessException("工单号生成繁忙,请重试");
+    }
+
+    /** 工单号规则: yyyyMMdd + 当日4位流水号(取当日最大号+1, 而非计数, 避免删除数据后重号) */
+    private String nextOrderNo() {
         String today = LocalDate.now().format(NO_FMT);
-        Long todayCount = orderMapper.selectCount(new LambdaQueryWrapper<RepairOrder>()
-                .likeRight(RepairOrder::getOrderNo, today));
-        return today + String.format("%04d", todayCount + 1);
+        RepairOrder latest = orderMapper.selectOne(new LambdaQueryWrapper<RepairOrder>()
+                .likeRight(RepairOrder::getOrderNo, today)
+                .orderByDesc(RepairOrder::getOrderNo)
+                .last("LIMIT 1"));
+        int seq = 1;
+        if (latest != null) {
+            seq = Integer.parseInt(latest.getOrderNo().substring(today.length())) + 1;
+        }
+        return today + String.format("%04d", seq);
     }
 
-    // ==================== 管理员:派单 ====================
+    // ==================== 管理员:派单(兜底, 记 MANUAL) ====================
     @Transactional
     public void assign(Long orderId, Long adminId, Long workerId) {
         RepairOrder order = getOrder(orderId);
@@ -88,14 +112,40 @@ public class OrderService {
         if (worker == null || !"WORKER".equals(worker.getRole())) {
             throw new BusinessException("维修工不存在");
         }
-        order.setStatus(RepairOrder.STATUS_PROCESSING);
-        order.setWorkerId(workerId);
-        order.setAdminId(adminId);
-        order.setAssignTime(LocalDateTime.now());
-        orderMapper.updateById(order);
+        // 带状态条件的乐观更新, 防并发重复派单
+        int rows = orderMapper.update(null, new LambdaUpdateWrapper<RepairOrder>()
+                .eq(RepairOrder::getId, orderId)
+                .eq(RepairOrder::getStatus, RepairOrder.STATUS_PENDING_DISPATCH)
+                .set(RepairOrder::getStatus, RepairOrder.STATUS_PROCESSING)
+                .set(RepairOrder::getWorkerId, workerId)
+                .set(RepairOrder::getAdminId, adminId)
+                .set(RepairOrder::getAssignTime, LocalDateTime.now())
+                .set(RepairOrder::getDispatchType, DispatchService.TYPE_MANUAL)
+                .set(RepairOrder::getDispatchScore, null)
+                .set(RepairOrder::getReassignCount, 0)
+                .set(RepairOrder::getTriedWorkers, String.valueOf(workerId)));
+        if (rows == 0) {
+            throw new BusinessException("该工单已被处理,请刷新后查看");
+        }
 
         addLog(orderId, adminId, OrderLog.ACTION_ASSIGN, "派单给 " + worker.getRealName());
-        sendMessage(workerId, "您有新的维修任务【" + order.getOrderNo() + "】" + order.getTitle() + ",请及时处理");
+        sendMessage(workerId, "您有新的维修任务【" + order.getOrderNo() + "】" + order.getTitle() + ",请及时接单处理");
+    }
+
+    // ==================== 维修工:接单确认 ====================
+    @Transactional
+    public void accept(Long orderId, Long workerId) {
+        RepairOrder order = getOrder(orderId);
+        checkOwner(order, workerId, "只有该工单的维修工才能接单");
+        checkStatus(order, RepairOrder.STATUS_PROCESSING, "工单当前状态不可接单");
+        if (order.getWorkerAcceptTime() != null) {
+            throw new BusinessException("您已接单,请及时维修");
+        }
+        order.setWorkerAcceptTime(LocalDateTime.now());
+        orderMapper.updateById(order);
+
+        addLog(orderId, workerId, OrderLog.ACTION_ACCEPT, "维修工已接单,维修中");
+        sendMessage(order.getUserId(), "您的报修【" + order.getOrderNo() + "】师傅已接单,维修中");
     }
 
     // ==================== 维修工:完成维修 ====================
@@ -225,7 +275,8 @@ public class OrderService {
             // 默认显示未完结的
             wrapper.in(RepairOrder::getStatus, RepairOrder.STATUS_PROCESSING, RepairOrder.STATUS_PENDING_ACCEPTANCE);
         }
-        wrapper.orderByDesc(RepairOrder::getSubmitTime);
+        // 提交时间正序: 最早的单排最前, 避免老工单一直被新单压在后面无人处理
+        wrapper.orderByAsc(RepairOrder::getSubmitTime);
         return convertPage(orderMapper.selectPage(new Page<>(current, size), wrapper));
     }
 
@@ -238,27 +289,40 @@ public class OrderService {
         if (StringUtils.hasText(keyword)) {
             wrapper.and(w -> w.like(RepairOrder::getOrderNo, keyword).or().like(RepairOrder::getTitle, keyword));
         }
-        wrapper.orderByDesc(RepairOrder::getSubmitTime);
+        // 状态升序(待派单->处理中->待验收->已完成->已关闭) + 提交时间正序:
+        // 待处理的排最前、最老的待处理单排最最前, 管理员先看到最需要处理的
+        wrapper.orderByAsc(RepairOrder::getStatus)
+               .orderByAsc(RepairOrder::getSubmitTime);
         return convertPage(orderMapper.selectPage(new Page<>(current, size), wrapper));
     }
 
-    /** 工单详情(含日志) */
-    public OrderVO detail(Long orderId) {
-        return toVO(getOrder(orderId));
+    /**
+     * 工单详情(含归属校验):
+     * 管理员可看全部; 住户只能看自己的; 维修工只能看派给自己的
+     */
+    public OrderVO detail(Long orderId, Long userId, String role) {
+        RepairOrder order = getOrder(orderId);
+        checkViewPermission(order, userId, role);
+        return toVO(order);
     }
 
-    /** 工单流转日志(时间线) */
-    public List<LogVO> logs(Long orderId) {
+    /** 工单流转日志(时间线, 同详情的归属校验) */
+    public List<LogVO> logs(Long orderId, Long userId, String role) {
+        RepairOrder order = getOrder(orderId);
+        checkViewPermission(order, userId, role);
         List<OrderLog> logs = logMapper.selectList(new LambdaQueryWrapper<OrderLog>()
                 .eq(OrderLog::getOrderId, orderId).orderByAsc(OrderLog::getCreateTime));
-        Map<Long, User> users = userMapper.selectBatchIds(
-                        logs.stream().map(OrderLog::getOperatorId).distinct().collect(Collectors.toList()))
-                .stream().collect(Collectors.toMap(User::getId, Function.identity()));
+        List<Long> operatorIds = logs.stream().map(OrderLog::getOperatorId)
+                .filter(id -> id != null && id > 0).distinct().collect(Collectors.toList());
+        Map<Long, User> users = operatorIds.isEmpty() ? Map.of()
+                : userMapper.selectBatchIds(operatorIds).stream()
+                        .collect(Collectors.toMap(User::getId, Function.identity()));
         return logs.stream().map(l -> {
             LogVO vo = new LogVO();
             vo.setId(l.getId());
+            // operatorId=0 表示系统动作(智能派单/自动改派)
             User u = users.get(l.getOperatorId());
-            vo.setOperatorName(u == null ? "未知用户" : u.getRealName());
+            vo.setOperatorName(u == null ? "系统" : u.getRealName());
             vo.setAction(l.getAction());
             vo.setActionText(actionText(l.getAction()));
             vo.setRemark(l.getRemark());
@@ -267,10 +331,25 @@ public class OrderService {
         }).collect(Collectors.toList());
     }
 
+    /** 查看权限: 管理员全部; 报修人本人; 该单维修工本人 */
+    private void checkViewPermission(RepairOrder order, Long userId, String role) {
+        if ("ADMIN".equals(role)) {
+            return;
+        }
+        boolean isOwner = order.getUserId().equals(userId);
+        boolean isWorker = order.getWorkerId() != null && order.getWorkerId().equals(userId);
+        if (!isOwner && !isWorker) {
+            throw new BusinessException("无权查看该工单");
+        }
+    }
+
     private String actionText(String action) {
         return switch (action) {
             case OrderLog.ACTION_SUBMIT -> "提交报修";
             case OrderLog.ACTION_ASSIGN -> "管理员派单";
+            case OrderLog.ACTION_AUTO_ASSIGN -> "智能派单";
+            case OrderLog.ACTION_REASSIGN -> "自动改派";
+            case OrderLog.ACTION_ACCEPT -> "接单确认";
             case OrderLog.ACTION_FINISH -> "维修完成";
             case OrderLog.ACTION_PASS -> "验收通过";
             case OrderLog.ACTION_REJECT -> "验收不通过";
@@ -352,6 +431,10 @@ public class OrderService {
         vo.setPriority(order.getPriority());
         vo.setUrgeCount(order.getUrgeCount());
         vo.setHandleNote(order.getHandleNote());
+        vo.setDispatchType(order.getDispatchType());
+        vo.setDispatchScore(order.getDispatchScore());
+        vo.setReassignCount(order.getReassignCount());
+        vo.setWorkerAcceptTime(order.getWorkerAcceptTime());
         vo.setSubmitTime(order.getSubmitTime());
         vo.setAssignTime(order.getAssignTime());
         vo.setFinishTime(order.getFinishTime());

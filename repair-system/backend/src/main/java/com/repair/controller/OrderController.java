@@ -1,6 +1,7 @@
 package com.repair.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.repair.audit.AuditLog;
 import com.repair.common.Result;
 import com.repair.dto.AcceptanceDTO;
 import com.repair.dto.AssignDTO;
@@ -16,10 +17,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 工单接口(按角色区分权限)
+ * 智能派单候选/规则接口在 DispatchController
  */
 @RestController
 @RequestMapping("/api/orders")
@@ -28,12 +29,12 @@ public class OrderController {
 
     private final OrderService orderService;
 
-    // ==================== 提交(住户) ====================
+    // ==================== 提交(住户, 触发智能派单) ====================
     @PostMapping
     @PreAuthorize("hasRole('RESIDENT')")
-    public Result<Void> create(@Valid @RequestBody OrderCreateDTO dto, Authentication auth) {
-        orderService.create((Long) auth.getPrincipal(), dto);
-        return Result.ok();
+    @AuditLog(module = "工单管理", action = "提交报修")
+    public Result<OrderVO> create(@Valid @RequestBody OrderCreateDTO dto, Authentication auth) {
+        return Result.ok(orderService.create((Long) auth.getPrincipal(), dto));
     }
 
     // ==================== 列表查询 ====================
@@ -67,8 +68,17 @@ public class OrderController {
     // ==================== 状态流转 ====================
     @PutMapping("/{id}/assign")
     @PreAuthorize("hasRole('ADMIN')")
+    @AuditLog(module = "工单管理", action = "手动派单")
     public Result<Void> assign(@PathVariable Long id, @Valid @RequestBody AssignDTO dto, Authentication auth) {
         orderService.assign(id, (Long) auth.getPrincipal(), dto.getWorkerId());
+        return Result.ok();
+    }
+
+    /** 维修工接单确认(S11): 记录接单时间, 通知住户 */
+    @PutMapping("/{id}/accept")
+    @PreAuthorize("hasRole('WORKER')")
+    public Result<Void> accept(@PathVariable Long id, Authentication auth) {
+        orderService.accept(id, (Long) auth.getPrincipal());
         return Result.ok();
     }
 
@@ -81,6 +91,7 @@ public class OrderController {
 
     @PutMapping("/{id}/acceptance")
     @PreAuthorize("hasRole('RESIDENT')")
+    @AuditLog(module = "工单管理", action = "验收工单")
     public Result<Void> acceptance(@PathVariable Long id, @Valid @RequestBody AcceptanceDTO dto, Authentication auth) {
         orderService.acceptance(id, (Long) auth.getPrincipal(), dto);
         return Result.ok();
@@ -88,6 +99,7 @@ public class OrderController {
 
     @PutMapping("/{id}/cancel")
     @PreAuthorize("hasRole('RESIDENT')")
+    @AuditLog(module = "工单管理", action = "撤销工单")
     public Result<Void> cancel(@PathVariable Long id, Authentication auth) {
         orderService.cancel(id, (Long) auth.getPrincipal());
         return Result.ok();
@@ -95,6 +107,7 @@ public class OrderController {
 
     @PutMapping("/{id}/close")
     @PreAuthorize("hasRole('ADMIN')")
+    @AuditLog(module = "工单管理", action = "关闭工单")
     public Result<Void> close(@PathVariable Long id, Authentication auth) {
         orderService.close(id, (Long) auth.getPrincipal());
         return Result.ok();
@@ -109,14 +122,16 @@ public class OrderController {
         return Result.ok();
     }
 
-    // ==================== 详情与日志 ====================
+    // ==================== 详情与日志(带归属校验) ====================
     @GetMapping("/{id}")
-    public Result<OrderVO> detail(@PathVariable Long id) {
-        return Result.ok(orderService.detail(id));
+    public Result<OrderVO> detail(@PathVariable Long id, Authentication auth) {
+        String role = auth.getAuthorities().iterator().next().getAuthority().replace("ROLE_", "");
+        return Result.ok(orderService.detail(id, (Long) auth.getPrincipal(), role));
     }
 
     @GetMapping("/{id}/logs")
-    public Result<List<LogVO>> logs(@PathVariable Long id) {
-        return Result.ok(orderService.logs(id));
+    public Result<List<LogVO>> logs(@PathVariable Long id, Authentication auth) {
+        String role = auth.getAuthorities().iterator().next().getAuthority().replace("ROLE_", "");
+        return Result.ok(orderService.logs(id, (Long) auth.getPrincipal(), role));
     }
 }

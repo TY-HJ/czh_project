@@ -25,5 +25,13 @@ onMounted(async () => {
   const page = await getNoticePage({ current: 1, size: 20 })
   list.value = page.records
   if (list.value.length > 0) activeNames.value = [list.value[0].id]
+
+  // 记录"最近已看公告"时间(取最新公告时间), 通知顶栏熄灭公告红点
+  const latest = list.value.length > 0 ? list.value[0].createTime : null
+  const seen = localStorage.getItem('noticeSeenAt')
+  if (latest && (!seen || latest > seen)) {
+    localStorage.setItem('noticeSeenAt', latest)
+  }
+  window.dispatchEvent(new Event('notice-seen'))
 })
 </script>

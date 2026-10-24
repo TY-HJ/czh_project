@@ -15,3 +15,7 @@ backend/uploads/
 .idea/
 *.iml
 .vscode/
+
+# ---- 本地工具环境 ----
+.tools/
+.workbuddy/

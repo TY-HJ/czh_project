@@ -4,10 +4,11 @@ server:
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # 按需修改用户名/密码(当前为 root/1234)
+    # 敏感配置支持环境变量外置(S9): DB_USERNAME / DB_PASSWORD
+    # 本地开发可用不入库的 application-local.yml 覆盖, 生产环境务必通过环境变量注入
     url: jdbc:mysql://localhost:3306/repair_system?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: root
-    password: "1234"
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:1234}
   servlet:
     multipart:
       max-file-size: 10MB
@@ -21,11 +22,11 @@ mybatis-plus:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
-# JWT 配置(生产环境请更换密钥)
+# JWT 配置: JWT_SECRET 支持环境变量注入, 生产环境必须更换
 jwt:
-  secret: RepairSystemJwtSecretKey-PleaseChangeMe-2026
+  secret: ${JWT_SECRET:RepairSystemJwtSecretKey-PleaseChangeMe-2026}
   expire-hours: 24
 
-# 图片上传保存目录(相对后端运行目录)
+# 图片上传保存目录: UPLOAD_DIR 支持环境变量, 默认为本项目 backend/uploads 绝对路径
 upload:
-  dir: ./uploads
+  dir: ${UPLOAD_DIR:D:/Workbuddy/work_space/repair-system/backend/uploads}

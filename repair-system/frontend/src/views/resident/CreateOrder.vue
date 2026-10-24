@@ -96,8 +96,13 @@ async function submit() {
   await formRef.value.validate()
   loading.value = true
   try {
-    await createOrder(form)
-    ElMessage.success('提交成功,请等待管理员派单')
+    // 后端返回提交结果: 若已智能派单, 直接告知住户维修去向, 避免"等待管理员派单"的误导
+    const vo = await createOrder(form)
+    if (vo && vo.status === 1 && vo.workerName) {
+      ElMessage.success(`提交成功(工单号 ${vo.orderNo}),已自动派单给 ${vo.workerName},请留意消息通知`)
+    } else {
+      ElMessage.success(`提交成功(工单号 ${vo && vo.orderNo ? vo.orderNo : ''}),已通知管理员尽快派单`)
+    }
     router.push('/my-orders')
   } finally {
     loading.value = false

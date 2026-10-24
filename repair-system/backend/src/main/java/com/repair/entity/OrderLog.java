@@ -15,6 +15,9 @@ import java.time.LocalDateTime;
 public class OrderLog {
     public static final String ACTION_SUBMIT = "SUBMIT";
     public static final String ACTION_ASSIGN = "ASSIGN";
+    public static final String ACTION_AUTO_ASSIGN = "AUTO_ASSIGN";
+    public static final String ACTION_REASSIGN = "REASSIGN";
+    public static final String ACTION_ACCEPT = "ACCEPT";
     public static final String ACTION_FINISH = "FINISH";
     public static final String ACTION_PASS = "PASS";
     public static final String ACTION_REJECT = "REJECT";

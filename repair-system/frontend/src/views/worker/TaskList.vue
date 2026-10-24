@@ -20,6 +20,14 @@
       <el-table-column prop="userName" label="报修人" width="90" />
       <el-table-column prop="userPhone" label="联系电话" width="120" />
       <el-table-column label="状态" width="90"><template #default="{ row }"><status-tag :status="row.status" /></template></el-table-column>
+      <el-table-column label="时效" width="110">
+        <template #default="{ row }">
+          <el-tooltip v-if="overdueText(row)" content="该任务派单后已超过48小时未完成,请尽快处理" placement="top">
+            <el-tag type="danger" size="small" effect="dark">{{ overdueText(row) }}</el-tag>
+          </el-tooltip>
+          <span v-else style="color:#999;font-size:12px">正常</span>
+        </template>
+      </el-table-column>
       <el-table-column label="评分" width="140">
         <template #default="{ row }">
           <el-rate v-if="row.score" :model-value="row.score" disabled size="small" />
@@ -55,6 +63,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import dayjs from 'dayjs'
 import StatusTag from '../../components/StatusTag.vue'
 import OrderDetailDialog from '../../components/OrderDetailDialog.vue'
 import { getWorkerOrders, finishOrder } from '../../api/order'
@@ -72,6 +81,14 @@ async function load() {
   const page = await getWorkerOrders(query)
   list.value = page.records
   total.value = Number(page.total)
+}
+
+// 超时提醒: 处理中超48小时(与系统自动改派/催办口径一致)
+function overdueText(row) {
+  if (row.status === 1 && row.assignTime && dayjs().diff(dayjs(row.assignTime), 'hour', true) > 48) {
+    return '超48h未完成'
+  }
+  return null
 }
 
 function openFinish(row) {

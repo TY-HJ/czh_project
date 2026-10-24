@@ -1,9 +1,9 @@
 <template>
   <div>
-    <!-- 统计卡片 -->
+    <!-- 统计卡片: 点击跳转工单管理对应状态筛选 -->
     <el-row :gutter="16">
       <el-col :span="4" v-for="card in cards" :key="card.label">
-        <el-card shadow="hover">
+        <el-card shadow="hover" class="stat-card" @click="card.status !== undefined && $router.push({ path: '/order-manage', query: { status: card.status } })">
           <div class="stat-value" :style="{ color: card.color }">{{ card.value }}</div>
           <div class="stat-label">{{ card.label }}</div>
         </el-card>
@@ -48,11 +48,11 @@ const trendChart = ref()
 const rankChart = ref()
 
 const cards = computed(() => [
-  { label: '工单总数', value: overview.value.total ?? 0, color: '#303133' },
-  { label: '待派单', value: overview.value.pendingDispatch ?? 0, color: '#E6A23C' },
-  { label: '处理中', value: overview.value.processing ?? 0, color: '#409EFF' },
-  { label: '待验收', value: overview.value.pendingAcceptance ?? 0, color: '#909399' },
-  { label: '已完成', value: overview.value.completed ?? 0, color: '#67C23A' },
+  { label: '工单总数', value: overview.value.total ?? 0, color: '#303133', status: null },
+  { label: '待派单', value: overview.value.pendingDispatch ?? 0, color: '#E6A23C', status: 0 },
+  { label: '处理中', value: overview.value.processing ?? 0, color: '#409EFF', status: 1 },
+  { label: '待验收', value: overview.value.pendingAcceptance ?? 0, color: '#909399', status: 2 },
+  { label: '已完成', value: overview.value.completed ?? 0, color: '#67C23A', status: 3 },
   { label: '平均时长(时)', value: overview.value.avgDurationHours ?? 0, color: '#F56C6C' }
 ])
 
@@ -104,5 +104,6 @@ onMounted(async () => {
 <style scoped>
 .stat-value { font-size: 28px; font-weight: bold; text-align: center; }
 .stat-label { text-align: center; color: #909399; margin-top: 6px; font-size: 13px; }
+.stat-card { cursor: pointer; }
 .chart { height: 300px; }
 </style>

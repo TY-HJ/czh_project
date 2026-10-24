@@ -31,8 +31,8 @@
 ## 三、环境准备
 
 - JDK 17+（本项目在 JDK 21 下验证）
-- Maven 3.8+（项目自带便携版在 `.tools/apache-maven-3.9.16`）
-- Node.js 18+（前端依赖已安装到 `frontend/node_modules`）
+- Maven 3.8+
+- Node.js 18+（首次运行前请在 `frontend` 目录执行 `npm install`）
 - MySQL 8.0
 
 ## 四、启动步骤
@@ -48,11 +48,10 @@ mysql -uroot -p < sql/init.sql
 
 ### 2. 启动后端（端口 8080）
 
-```bash
-cd backend
-mvn spring-boot:run
-# 或打包运行: mvn package -DskipTests && java -jar target/repair-system-1.0.0.jar
-```
+用 IDEA 打开 `backend` 目录（或项目根目录），找到入口类
+`backend/src/main/java/com/repair/RepairSystemApplication.java`，直接运行 main 方法即可。
+
+> 也可命令行启动: `cd backend && mvn spring-boot:run`
 
 ### 3. 启动前端（端口 5173）
 
@@ -73,7 +72,11 @@ npm run dev
 | `lisi` | 维修工 | 处理工单、填写处理说明 |
 | `wangwu` | 维修工 | 备用维修工（可演示派单给不同人） |
 
-**快速启动（答辩演示）**：双击项目根目录的 `start-all.bat` 一键启动前后端并打开浏览器；也可分别双击 `start-backend.bat` / `start-frontend.bat`；重置演示数据双击 `reset-database.bat`。
+**演示数据说明**：`sql/restore_seed.sql` 可恢复 init.sql 自带的 4 条示例工单（统计图表有数据可看）；`sql/cleanup_demo.sql` 可清理测试残留数据。执行方式：
+
+```bash
+mysql -uroot -p repair_system < sql/restore_seed.sql
+```
 
 **建议按此流程体验完整闭环**：住户提交报修 → 管理员派单给李师傅 → 李师傅完成维修 → 住户验收打分 → 管理员查看统计大屏。
 

@@ -2,7 +2,7 @@
   <el-card>
     <template #header>
       <div style="display: flex; justify-content: space-between; align-items: center">
-        <b>我的工单</b>
+        <b>我的报修</b>
         <el-radio-group v-model="query.status" @change="load">
           <el-radio-button :value="null">全部</el-radio-button>
           <el-radio-button v-for="(v, k) in statusMap" :key="k" :value="Number(k)">{{ v }}</el-radio-button>

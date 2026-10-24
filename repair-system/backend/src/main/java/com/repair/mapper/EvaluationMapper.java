@@ -11,8 +11,8 @@ import java.util.Map;
 @Mapper
 public interface EvaluationMapper extends BaseMapper<Evaluation> {
 
-    /** 维修工评分排行 */
-    @Select("SELECT u.real_name AS workerName, ROUND(AVG(e.score),1) AS avgScore, COUNT(*) AS orderCount " +
+    /** 维修工评分排行(附workerId便于后端补充技能标签) */
+    @Select("SELECT e.worker_id AS workerId, u.real_name AS workerName, ROUND(AVG(e.score),1) AS avgScore, COUNT(*) AS orderCount " +
             "FROM evaluation e JOIN `user` u ON e.worker_id = u.id " +
             "GROUP BY e.worker_id, u.real_name ORDER BY avgScore DESC")
     List<Map<String, Object>> statWorkerRanking();
