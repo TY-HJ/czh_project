@@ -12,4 +12,6 @@ public class RepairType {
     private Long id;
     private String typeName;
     private Integer sort;
+    /** 派单方式: true-系统自动派单 false-必须管理员人工派单(如电梯故障需联系维保单位) */
+    private Boolean autoDispatch;
 }

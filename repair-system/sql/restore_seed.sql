@@ -1,7 +1,7 @@
 -- ============================================================
 -- repair-system 演示示例数据恢复脚本 (restore_seed.sql)
 -- 作用: 恢复 init.sql 中自带的 4 条示例工单及其流转日志、评价记录
---       (与 init.sql 的种子数据完全一致, 仅在已被清空的库上使用)
+-- 特点: 可重复执行 —— 只重置 1~4 号示例工单, 不影响你后续提交的新工单
 -- 前提: user/repair_type/location/dispatch_rule/worker_skill 等基础数据完好
 -- 执行方式: mysql -uroot -p repair_system < sql/restore_seed.sql
 -- ============================================================
@@ -9,6 +9,11 @@
 USE repair_system;
 
 START TRANSACTION;
+
+-- 先清掉旧的示例数据, 保证脚本可重复执行
+DELETE FROM `order_log`  WHERE `order_id` BETWEEN 1 AND 4;
+DELETE FROM `evaluation` WHERE `order_id` BETWEEN 1 AND 4;
+DELETE FROM `repair_order` WHERE `id` BETWEEN 1 AND 4;
 
 -- 示例工单(显式指定 id, 保证与下方日志/评价的 order_id 对应)
 INSERT INTO `repair_order`
@@ -22,6 +27,7 @@ INSERT INTO `repair_order`
 ALTER TABLE `repair_order` AUTO_INCREMENT = 5;
 
 -- 流转日志
+-- 覆盖三种状态: 工单1/2 已完成并评价, 工单3 待验收(有完工记录), 工单4 待派单
 INSERT INTO `order_log` (`order_id`,`operator_id`,`action`,`remark`,`create_time`) VALUES
   (1, 2, 'SUBMIT',  '提交报修',                 '2026-01-05 09:30:00'),
   (1, 1, 'ASSIGN',  '派单给 李师傅',             '2026-01-05 10:00:00'),
@@ -33,6 +39,7 @@ INSERT INTO `order_log` (`order_id`,`operator_id`,`action`,`remark`,`create_time
   (2, 2, 'PASS',    '验收通过,评分4星',           '2026-01-09 12:00:00'),
   (3, 2, 'SUBMIT',  '提交报修',                 '2026-02-12 15:00:00'),
   (3, 1, 'ASSIGN',  '派单给 王师傅',             '2026-02-13 09:00:00'),
+  (3, 4, 'FINISH',  '重新紧固合页螺丝,窗户已能关严', '2026-02-13 11:00:00'),
   (4, 2, 'SUBMIT',  '提交报修',                 '2026-03-01 11:00:00');
 
 -- 验收评价

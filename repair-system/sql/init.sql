@@ -5,8 +5,9 @@
 -- 默认测试账号密码均为: 123456
 --   admin    / 123456   管理员
 --   zhangsan / 123456   住户
---   lisi     / 123456   维修工
---   wangwu   / 123456   维修工
+--   lisi     / 123456   维修工(水电/门禁/公共照明)
+--   wangwu   / 123456   维修工(门窗/电梯/其他)
+--   zhoubo   / 123456   维修工(网络故障专精)
 -- ============================================================
 
 DROP DATABASE IF EXISTS repair_system;
@@ -35,6 +36,7 @@ CREATE TABLE `repair_type` (
   `id`         BIGINT NOT NULL AUTO_INCREMENT,
   `type_name`  VARCHAR(50) NOT NULL COMMENT '类型名称',
   `sort`       INT NOT NULL DEFAULT 0 COMMENT '排序号',
+  `auto_dispatch` TINYINT NOT NULL DEFAULT 1 COMMENT '派单方式: 1-系统自动派单 0-必须管理员人工派单',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB COMMENT='报修类型字典';
 
@@ -85,7 +87,7 @@ CREATE TABLE `order_log` (
   `id`          BIGINT NOT NULL AUTO_INCREMENT,
   `order_id`    BIGINT NOT NULL COMMENT '工单ID',
   `operator_id` BIGINT NOT NULL COMMENT '操作人ID',
-  `action`      VARCHAR(50) NOT NULL COMMENT '动作: SUBMIT/ASSIGN/FINISH/PASS/REJECT/CANCEL/CLOSE/URGE',
+  `action`      VARCHAR(50) NOT NULL COMMENT '动作: SUBMIT/ASSIGN/AUTO_ASSIGN/REASSIGN/ACCEPT/REFUSE/HOLD/FINISH/PASS/REJECT/CANCEL/CLOSE/URGE',
   `remark`      VARCHAR(500) DEFAULT NULL COMMENT '备注',
   `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -143,7 +145,8 @@ CREATE TABLE `dispatch_rule` (
   `w_rating`              DECIMAL(4,2) NOT NULL DEFAULT 0.35 COMMENT '历史评分权重',
   `w_familiarity`         DECIMAL(4,2) NOT NULL DEFAULT 0.25 COMMENT '楼栋熟悉度权重',
   `urgency_boost`         DECIMAL(4,2) NOT NULL DEFAULT 0.50 COMMENT '紧急工单负荷权重放大系数',
-  `max_load`              INT NOT NULL DEFAULT 5 COMMENT '负荷归一化上限(未完成工单数)',
+  `max_load`              INT NOT NULL DEFAULT 5 COMMENT '负荷归一化上限(未完成工单数), 同时作为满负荷硬上限',
+  `min_candidates`        INT NOT NULL DEFAULT 1 COMMENT '可派候选人数下限, 少于该值转人工',
   `familiarity_full`      INT NOT NULL DEFAULT 5 COMMENT '熟悉度满分所需历史完成单数',
   `default_rating`        DECIMAL(4,2) NOT NULL DEFAULT 0.60 COMMENT '无评价时的默认评分得分',
   `reassign_limit`        INT NOT NULL DEFAULT 2 COMMENT '自动改派次数上限',
@@ -194,11 +197,15 @@ INSERT INTO `user` (`username`, `password`, `real_name`, `phone`, `role`) VALUES
 ('admin',    '$2a$10$TvqO1iyXKBwv4E3vnAwd3OaWbqsNVMqjLxHuwEMPCB1exhj/Sw.Ma', '系统管理员', '13800000001', 'ADMIN'),
 ('zhangsan', '$2a$10$TvqO1iyXKBwv4E3vnAwd3OaWbqsNVMqjLxHuwEMPCB1exhj/Sw.Ma', '张三',       '13800000002', 'RESIDENT'),
 ('lisi',     '$2a$10$TvqO1iyXKBwv4E3vnAwd3OaWbqsNVMqjLxHuwEMPCB1exhj/Sw.Ma', '李师傅',     '13800000003', 'WORKER'),
-('wangwu',   '$2a$10$TvqO1iyXKBwv4E3vnAwd3OaWbqsNVMqjLxHuwEMPCB1exhj/Sw.Ma', '王师傅',     '13800000004', 'WORKER');
+('wangwu',   '$2a$10$TvqO1iyXKBwv4E3vnAwd3OaWbqsNVMqjLxHuwEMPCB1exhj/Sw.Ma', '王师傅',     '13800000004', 'WORKER'),
+('zhaoliu',  '$2a$10$TvqO1iyXKBwv4E3vnAwd3OaWbqsNVMqjLxHuwEMPCB1exhj/Sw.Ma', '赵六',       '13800000005', 'RESIDENT'),
+('sunqi',    '$2a$10$TvqO1iyXKBwv4E3vnAwd3OaWbqsNVMqjLxHuwEMPCB1exhj/Sw.Ma', '孙七',       '13800000006', 'RESIDENT'),
+('zhoubo',   '$2a$10$TvqO1iyXKBwv4E3vnAwd3OaWbqsNVMqjLxHuwEMPCB1exhj/Sw.Ma', '周师傅',     '13800000007', 'WORKER');
 
--- 报修类型(六类社区常见故障)
-INSERT INTO `repair_type` (`type_name`, `sort`) VALUES
-('水电维修', 1), ('门窗维修', 2), ('电梯故障', 3), ('门禁系统', 4), ('公共照明', 5), ('其他', 6);
+-- 报修类型(七类社区常见故障; 电梯属特种设备, 默认人工派单由管理员联系维保)
+INSERT INTO `repair_type` (`type_name`, `sort`, `auto_dispatch`) VALUES
+('水电维修', 1, 1), ('门窗维修', 2, 1), ('电梯故障', 3, 0), ('门禁系统', 4, 1),
+('公共照明', 5, 1), ('其他', 6, 1), ('网络故障', 7, 1);
 
 -- 位置(楼栋-单元-房间)
 INSERT INTO `location` (`building`, `unit`, `room`) VALUES
@@ -235,14 +242,18 @@ INSERT INTO `notice` (`title`,`content`,`admin_id`) VALUES
 
 -- 派单规则默认配置(单行)
 INSERT INTO `dispatch_rule`
-  (`auto_dispatch_enabled`,`w_load`,`w_rating`,`w_familiarity`,`urgency_boost`,`max_load`,`familiarity_full`,`default_rating`,`reassign_limit`,`reassign_hours`,`top_n`)
+  (`auto_dispatch_enabled`,`w_load`,`w_rating`,`w_familiarity`,`urgency_boost`,`max_load`,`min_candidates`,`familiarity_full`,`default_rating`,`reassign_limit`,`reassign_hours`,`top_n`)
 VALUES
-  (1, 0.40, 0.35, 0.25, 0.50, 5, 5, 0.60, 2, 48, 5);
+  (1, 0.40, 0.35, 0.25, 0.50, 5, 1, 5, 0.60, 2, 48, 5);
 
--- 维修工技能标签(lisi=ID3: 水电/门禁/公共照明; wangwu=ID4: 门窗/电梯/其他)
+-- 维修工技能标签
+--   lisi(ID3)   : 水电/门禁/公共照明
+--   wangwu(ID4) : 门窗/电梯/其他
+--   zhoubo(ID7) : 网络故障(仅此一项, 网络类工单只有他能被自动派到)
 INSERT INTO `worker_skill` (`worker_id`, `type_id`) VALUES
 (3, 1), (3, 4), (3, 5),
-(4, 2), (4, 3), (4, 6);
+(4, 2), (4, 3), (4, 6),
+(7, 7);
 
 -- 知识库FAQ示例(分类与报修类型名称对应)
 INSERT INTO `faq` (`category`, `title`, `content`, `sort`, `admin_id`) VALUES
@@ -251,4 +262,5 @@ INSERT INTO `faq` (`category`, `title`, `content`, `sort`, `admin_id`) VALUES
 ('门窗维修', '窗户关不严/漏风处理', '1. 检查合页螺丝是否松动,用螺丝刀拧紧;\n2. 清理窗框密封槽内的灰尘异物;\n3. 变形严重的塑钢窗不建议自行掰正,请报修更换。', 3, 1),
 ('电梯故障', '电梯困人应急须知', '1. 保持冷静,持续按警铃按钮呼叫监控室;\n2. 切勿扒门或攀爬逃生;\n3. 监控室会通知维保单位30分钟内到场救援;\n4. 电梯轻微异响/楼层显示异常也请及时报修。', 4, 1),
 ('门禁系统', '门禁卡失灵自查', '1. 换一张卡测试,判断是卡问题还是读卡器问题;\n2. 卡失灵请联系物业前台重新写卡;\n3. 读卡器无反应/灯不亮请报修并在描述中注明单元号。', 5, 1),
-('公共照明', '楼道灯不亮报修指引', '1. 确认是常亮灯还是声控灯(声控灯夜间拍手测试);\n2. 记录楼栋/单元/楼层便于师傅定位;\n3. 提交报修时选择"公共照明"并上传灯位照片。', 6, 1);
+('公共照明', '楼道灯不亮报修指引', '1. 确认是常亮灯还是声控灯(声控灯夜间拍手测试);\n2. 记录楼栋/单元/楼层便于师傅定位;\n3. 提交报修时选择"公共照明"并上传灯位照片。', 6, 1),
+('网络故障', '家里宽带上不了网自查', '1. 重启光猫与路由器,等待2分钟再试;\n2. 查看光猫指示灯: LOS 红灯为线路故障,需报修;\n3. 手机连不上WiFi但电脑有线正常,多为路由器无线模块问题;\n4. 提交报修时注明是"全屋断网"还是"仅某房间信号弱"。', 7, 1);

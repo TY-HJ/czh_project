@@ -5,9 +5,11 @@ import com.repair.common.BusinessException;
 import com.repair.entity.Location;
 import com.repair.entity.RepairOrder;
 import com.repair.entity.RepairType;
+import com.repair.entity.WorkerSkill;
 import com.repair.mapper.LocationMapper;
 import com.repair.mapper.RepairOrderMapper;
 import com.repair.mapper.RepairTypeMapper;
+import com.repair.mapper.WorkerSkillMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +25,7 @@ public class DictService {
     private final RepairTypeMapper typeMapper;
     private final LocationMapper locationMapper;
     private final RepairOrderMapper orderMapper;
+    private final WorkerSkillMapper workerSkillMapper;
 
     // ---------- 报修类型 ----------
     public List<RepairType> listTypes() {
@@ -33,6 +36,9 @@ public class DictService {
 
     public void addType(RepairType type) {
         type.setId(null);
+        if (type.getAutoDispatch() == null) {
+            type.setAutoDispatch(true);   // 新增类型默认走自动派单
+        }
         typeMapper.insert(type);
     }
 
@@ -48,6 +54,11 @@ public class DictService {
                 .eq(RepairOrder::getTypeId, id));
         if (used > 0) {
             throw new BusinessException("该报修类型已被 " + used + " 张工单使用,不能删除");
+        }
+        Long skilled = workerSkillMapper.selectCount(new LambdaQueryWrapper<WorkerSkill>()
+                .eq(WorkerSkill::getTypeId, id));
+        if (skilled > 0) {
+            throw new BusinessException("已有 " + skilled + " 名维修工配置了该类型技能,请先解除技能绑定");
         }
         typeMapper.deleteById(id);
     }

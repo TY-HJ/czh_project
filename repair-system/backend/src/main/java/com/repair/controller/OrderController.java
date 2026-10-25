@@ -7,6 +7,7 @@ import com.repair.dto.AcceptanceDTO;
 import com.repair.dto.AssignDTO;
 import com.repair.dto.FinishDTO;
 import com.repair.dto.OrderCreateDTO;
+import com.repair.dto.RefuseDTO;
 import com.repair.service.OrderService;
 import com.repair.vo.LogVO;
 import com.repair.vo.OrderVO;
@@ -68,7 +69,7 @@ public class OrderController {
     // ==================== 状态流转 ====================
     @PutMapping("/{id}/assign")
     @PreAuthorize("hasRole('ADMIN')")
-    @AuditLog(module = "工单管理", action = "手动派单")
+    @AuditLog(module = "工单管理", action = "派单/改派")
     public Result<Void> assign(@PathVariable Long id, @Valid @RequestBody AssignDTO dto, Authentication auth) {
         orderService.assign(id, (Long) auth.getPrincipal(), dto.getWorkerId());
         return Result.ok();
@@ -79,6 +80,15 @@ public class OrderController {
     @PreAuthorize("hasRole('WORKER')")
     public Result<Void> accept(@PathVariable Long id, Authentication auth) {
         orderService.accept(id, (Long) auth.getPrincipal());
+        return Result.ok();
+    }
+
+    /** 维修工拒单: 未接单前可拒, 必填原因, 工单退回待派单 */
+    @PutMapping("/{id}/refuse")
+    @PreAuthorize("hasRole('WORKER')")
+    @AuditLog(module = "工单管理", action = "维修工拒单")
+    public Result<Void> refuse(@PathVariable Long id, @Valid @RequestBody RefuseDTO dto, Authentication auth) {
+        orderService.refuse(id, (Long) auth.getPrincipal(), dto.getReason());
         return Result.ok();
     }
 

@@ -176,7 +176,24 @@ check("派单方式 = AUTO", order.get("dispatchType") == "AUTO", order.get("dis
 
 expect_fail("派单不传维修工被拒", api("PUT", "/api/orders/%d/assign" % oid, token=admin_token, payload={}))
 expect_fail("派单给住户被拒(维修工不存在)", api("PUT", "/api/orders/%d/assign" % oid, token=admin_token, payload={"workerId": zs_id}))
-expect_fail("已派单工单重复派单被拒", api("PUT", "/api/orders/%d/assign" % oid, token=admin_token, payload={"workerId": ww.get("id") if ww else 0}))
+# V3.1/A2: 处理中再次派单=改派, 但派给当前同一个人应被拒
+expect_fail("派给当前维修工被拒(无需重复派单)", api("PUT", "/api/orders/%d/assign" % oid, token=admin_token,
+                                            payload={"workerId": order.get("workerId")}))
+# V3.1/A2: 改派给其他师傅 -> 再改派回来, 验证改派通道可用且不破坏后续接单流程
+if ww and ww.get("id") != order.get("workerId"):
+    expect_ok("处理中工单可改派给其他维修工", api("PUT", "/api/orders/%d/assign" % oid, token=admin_token,
+                                        payload={"workerId": ww.get("id")}))
+    re_assigned = find_order(admin_token, "E2E-A" + TS)
+    check("改派后维修工已变更", bool(re_assigned) and re_assigned.get("workerId") == ww.get("id"),
+          re_assigned and re_assigned.get("workerId"))
+    check("改派后接单时间被清空(需新师傅重新接单)",
+          bool(re_assigned) and not re_assigned.get("workerAcceptTime"), re_assigned and re_assigned.get("workerAcceptTime"))
+    expect_ok("改派回原维修工", api("PUT", "/api/orders/%d/assign" % oid, token=admin_token,
+                              payload={"workerId": order.get("workerId")}))
+# V3.1/A2: 拒单接口的校验分支(不改状态)
+expect_fail("住户调用拒单被拒(角色越权)", api("PUT", "/api/orders/%d/refuse" % oid, token=zs_token,
+                                       payload={"reason": "越权测试"}))
+expect_fail("拒单不填原因被拒", api("PUT", "/api/orders/%d/refuse" % oid, token=lisi_token, payload={"reason": ""}))
 
 expect_fail("他人住户查看工单详情被拒(数据越权)", api("GET", "/api/orders/%d" % oid, token=nu_token))
 d = expect_ok("报修人查看工单详情", api("GET", "/api/orders/%d" % oid, token=zs_token))
@@ -193,6 +210,8 @@ check("维修工工单列表包含该单", bool(wpage and any(r["id"] == oid for
 expect_fail("住户在处理中验收被拒(非法流转)", api("PUT", "/api/orders/%d/acceptance" % oid, token=zs_token,
                                                 payload={"pass": True, "score": 5}))
 expect_ok("维修工接单确认", api("PUT", "/api/orders/%d/accept" % oid, token=lisi_token))
+expect_fail("已接单后拒单被拒(需走管理员改派)", api("PUT", "/api/orders/%d/refuse" % oid, token=lisi_token,
+                                           payload={"reason": "接到一半想推掉"}))
 expect_ok("维修工完成维修", api("PUT", "/api/orders/%d/finish" % oid, token=lisi_token,
                               payload={"handleNote": "更换阀芯并测试正常"}))
 d = expect_ok("完成后查看详情", api("GET", "/api/orders/%d" % oid, token=zs_token))

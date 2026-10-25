@@ -100,6 +100,9 @@ async function submit() {
     const vo = await createOrder(form)
     if (vo && vo.status === 1 && vo.workerName) {
       ElMessage.success(`提交成功(工单号 ${vo.orderNo}),已自动派单给 ${vo.workerName},请留意消息通知`)
+    } else if (vo && vo.dispatchHint) {
+      // 未自动派单: 把系统给出的原因如实告知, 避免住户误以为没人管
+      ElMessage.success(`提交成功(工单号 ${vo.orderNo}),本次转人工派单:${vo.dispatchHint},管理员会尽快安排师傅`)
     } else {
       ElMessage.success(`提交成功(工单号 ${vo && vo.orderNo ? vo.orderNo : ''}),已通知管理员尽快派单`)
     }

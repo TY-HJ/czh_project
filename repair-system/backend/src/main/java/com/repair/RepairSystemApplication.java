@@ -11,6 +11,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling   // 开启定时任务(工单超时催办)
 public class RepairSystemApplication {
     public static void main(String[] args) {
+
         SpringApplication.run(RepairSystemApplication.class, args);
     }
 }

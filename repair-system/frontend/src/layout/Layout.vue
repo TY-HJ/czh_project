@@ -74,6 +74,7 @@ const menus = computed(() => {
     return [
       { path: '/dashboard', title: '数据统计', icon: 'DataAnalysis' },
       { path: '/order-manage', title: '工单管理', icon: 'Tickets' },
+      { path: '/dispatch-rule', title: '派单规则', icon: 'Operation' },
       { path: '/user-manage', title: '用户管理', icon: 'User' },
       { path: '/dict-manage', title: '字典管理', icon: 'Menu' },
       { path: '/notice-manage', title: '公告管理', icon: 'Bell' },

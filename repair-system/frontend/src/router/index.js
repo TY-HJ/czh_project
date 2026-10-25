@@ -16,6 +16,7 @@ const routes = [
       // 管理员
       { path: 'dashboard', component: () => import('../views/admin/Dashboard.vue'), meta: { roles: ['ADMIN'], title: '数据统计' } },
       { path: 'order-manage', component: () => import('../views/admin/OrderManage.vue'), meta: { roles: ['ADMIN'], title: '工单管理' } },
+      { path: 'dispatch-rule', component: () => import('../views/admin/DispatchRule.vue'), meta: { roles: ['ADMIN'], title: '派单规则' } },
       { path: 'user-manage', component: () => import('../views/admin/UserManage.vue'), meta: { roles: ['ADMIN'], title: '用户管理' } },
       { path: 'dict-manage', component: () => import('../views/admin/DictManage.vue'), meta: { roles: ['ADMIN'], title: '字典管理' } },
       { path: 'notice-manage', component: () => import('../views/admin/NoticeManage.vue'), meta: { roles: ['ADMIN'], title: '公告管理' } },

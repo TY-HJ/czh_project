@@ -65,10 +65,12 @@ public class OrderService {
         insertWithOrderNo(order);   // 工单号并发防重
 
         addLog(order.getId(), userId, OrderLog.ACTION_SUBMIT, "提交报修");
-        // 提交成功后立即触发智能派单(V2.0): 开关关闭/无匹配时由 DispatchService 转人工通知管理员
-        dispatchService.autoDispatch(order.getId());
-        // 返回提交结果(含自动派单去向), 前端据此给出准确反馈
-        return toVO(orderMapper.selectById(order.getId()));
+        // 提交成功后立即触发智能派单: 按规则判定, 通过则自动派出, 不通过则写 HOLD 留痕并通知管理员
+        String holdReason = dispatchService.autoDispatch(order.getId());
+        // 返回提交结果(含自动派单去向/转人工原因), 前端据此给出准确反馈
+        OrderVO vo = toVO(orderMapper.selectById(order.getId()));
+        vo.setDispatchHint(holdReason);
+        return vo;
     }
 
     /** 生成工单号并插入; 撞唯一约束(并发提交)时最多重试3次 */
@@ -100,11 +102,15 @@ public class OrderService {
         return today + String.format("%04d", seq);
     }
 
-    // ==================== 管理员:派单(兜底, 记 MANUAL) ====================
+    // ==================== 管理员:派单/改派(记 MANUAL) ====================
     @Transactional
     public void assign(Long orderId, Long adminId, Long workerId) {
         RepairOrder order = getOrder(orderId);
-        checkStatus(order, RepairOrder.STATUS_PENDING_DISPATCH, "该工单已派单,无需重复操作");
+        // 待派单 -> 派单; 处理中 -> 改派(换人换师傅, 超时重新计时)
+        boolean reassign = order.getStatus() == RepairOrder.STATUS_PROCESSING;
+        if (order.getStatus() != RepairOrder.STATUS_PENDING_DISPATCH && !reassign) {
+            throw new BusinessException("该工单当前状态不可派单");
+        }
         if (workerId == null) {
             throw new BusinessException("请选择维修工");
         }
@@ -112,23 +118,43 @@ public class OrderService {
         if (worker == null || !"WORKER".equals(worker.getRole())) {
             throw new BusinessException("维修工不存在");
         }
-        // 带状态条件的乐观更新, 防并发重复派单
-        int rows = orderMapper.update(null, new LambdaUpdateWrapper<RepairOrder>()
+        Long oldWorkerId = order.getWorkerId();
+        if (reassign && workerId.equals(oldWorkerId)) {
+            throw new BusinessException("该工单当前就派给" + worker.getRealName() + ",请选择其他维修工");
+        }
+        int oldReassign = order.getReassignCount() == null ? 0 : order.getReassignCount();
+
+        // 带状态条件的乐观更新, 防并发重复派单/改派
+        LambdaUpdateWrapper<RepairOrder> update = new LambdaUpdateWrapper<RepairOrder>()
                 .eq(RepairOrder::getId, orderId)
-                .eq(RepairOrder::getStatus, RepairOrder.STATUS_PENDING_DISPATCH)
+                .in(RepairOrder::getStatus, RepairOrder.STATUS_PENDING_DISPATCH, RepairOrder.STATUS_PROCESSING)
                 .set(RepairOrder::getStatus, RepairOrder.STATUS_PROCESSING)
                 .set(RepairOrder::getWorkerId, workerId)
                 .set(RepairOrder::getAdminId, adminId)
                 .set(RepairOrder::getAssignTime, LocalDateTime.now())
+                .set(RepairOrder::getWorkerAcceptTime, null)   // 换人后需新师傅重新接单
                 .set(RepairOrder::getDispatchType, DispatchService.TYPE_MANUAL)
                 .set(RepairOrder::getDispatchScore, null)
-                .set(RepairOrder::getReassignCount, 0)
-                .set(RepairOrder::getTriedWorkers, String.valueOf(workerId)));
+                .set(RepairOrder::getReassignCount, reassign ? oldReassign + 1 : 0)
+                .set(RepairOrder::getTriedWorkers, mergeTried(order.getTriedWorkers(), workerId));
+        if (reassign && oldWorkerId != null) {
+            update.eq(RepairOrder::getWorkerId, oldWorkerId);   // 防止并发改派覆盖
+        }
+        int rows = orderMapper.update(null, update);
         if (rows == 0) {
             throw new BusinessException("该工单已被处理,请刷新后查看");
         }
 
-        addLog(orderId, adminId, OrderLog.ACTION_ASSIGN, "派单给 " + worker.getRealName());
+        if (reassign) {
+            String oldName = oldWorkerId == null ? "原维修工" : realNameOf(oldWorkerId);
+            addLog(orderId, adminId, OrderLog.ACTION_REASSIGN, "管理员改派: " + oldName + " → " + worker.getRealName());
+            if (oldWorkerId != null && !oldWorkerId.equals(workerId)) {
+                sendMessage(oldWorkerId, "工单【" + order.getOrderNo() + "】已被管理员改派给其他师傅,您无需再处理");
+            }
+            sendMessage(order.getUserId(), "您的报修【" + order.getOrderNo() + "】已改派给" + worker.getRealName() + ",请等待接单");
+        } else {
+            addLog(orderId, adminId, OrderLog.ACTION_ASSIGN, "派单给 " + worker.getRealName());
+        }
         sendMessage(workerId, "您有新的维修任务【" + order.getOrderNo() + "】" + order.getTitle() + ",请及时接单处理");
     }
 
@@ -148,12 +174,53 @@ public class OrderService {
         sendMessage(order.getUserId(), "您的报修【" + order.getOrderNo() + "】师傅已接单,维修中");
     }
 
+    // ==================== 维修工:拒单(退回待派单, 由管理员重新派) ====================
+    @Transactional
+    public void refuse(Long orderId, Long workerId, String reason) {
+        RepairOrder order = getOrder(orderId);
+        if (!workerId.equals(order.getWorkerId())) {
+            throw new BusinessException("只有该工单的维修工才能拒单");
+        }
+        checkStatus(order, RepairOrder.STATUS_PROCESSING, "工单当前状态不可拒单");
+        if (order.getWorkerAcceptTime() != null) {
+            throw new BusinessException("您已接单维修,如需转交请联系管理员改派");
+        }
+        if (!StringUtils.hasText(reason)) {
+            throw new BusinessException("请填写拒单原因");
+        }
+        String trimmed = reason.trim();
+        String workerName = realNameOf(workerId);
+
+        // 带条件更新: 防止并发接单/改派后仍被拒单
+        int rows = orderMapper.update(null, new LambdaUpdateWrapper<RepairOrder>()
+                .eq(RepairOrder::getId, orderId)
+                .eq(RepairOrder::getStatus, RepairOrder.STATUS_PROCESSING)
+                .eq(RepairOrder::getWorkerId, workerId)
+                .isNull(RepairOrder::getWorkerAcceptTime)
+                .set(RepairOrder::getStatus, RepairOrder.STATUS_PENDING_DISPATCH)
+                .set(RepairOrder::getWorkerId, null)
+                .set(RepairOrder::getAssignTime, null)
+                .set(RepairOrder::getDispatchScore, null)
+                .set(RepairOrder::getTriedWorkers, mergeTried(order.getTriedWorkers(), workerId)));
+        if (rows == 0) {
+            throw new BusinessException("该工单状态已变化,请刷新后查看");
+        }
+
+        addLog(orderId, workerId, OrderLog.ACTION_REFUSE, "拒单:" + trimmed);
+        notifyRole("ADMIN", "工单【" + order.getOrderNo() + "】被维修工" + workerName + "拒单,原因:" + trimmed
+                + ",已退回待派单,请重新派单");
+        sendMessage(order.getUserId(), "您的报修【" + order.getOrderNo() + "】正在重新安排维修师傅,请稍候");
+    }
+
     // ==================== 维修工:完成维修 ====================
     @Transactional
     public void finish(Long orderId, Long workerId, String handleNote) {
         RepairOrder order = getOrder(orderId);
         checkOwner(order, workerId, "只有该工单的维修工才能操作");
         checkStatus(order, RepairOrder.STATUS_PROCESSING, "工单当前状态不可标记完成");
+        if (order.getWorkerAcceptTime() == null) {
+            throw new BusinessException("请先接单再报完工");
+        }
         order.setStatus(RepairOrder.STATUS_PENDING_ACCEPTANCE);
         order.setHandleNote(handleNote);
         order.setFinishTime(LocalDateTime.now());
@@ -331,16 +398,37 @@ public class OrderService {
         }).collect(Collectors.toList());
     }
 
-    /** 查看权限: 管理员全部; 报修人本人; 该单维修工本人 */
+    /**
+     * 查看权限: 管理员全部; 报修人本人; 本单经手过的维修工。
+     * 经手人包含"当前指派的"和"改派前/已拒单的"两类:
+     * 后者在消息中心仍持有该工单的通知, 若禁止查看会导致消息里的详情入口全部失效。
+     */
     private void checkViewPermission(RepairOrder order, Long userId, String role) {
         if ("ADMIN".equals(role)) {
             return;
         }
         boolean isOwner = order.getUserId().equals(userId);
         boolean isWorker = order.getWorkerId() != null && order.getWorkerId().equals(userId);
+        if (!isOwner && !isWorker && "WORKER".equals(role) && isTriedWorker(order.getTriedWorkers(), userId)) {
+            isWorker = true;
+        }
         if (!isOwner && !isWorker) {
             throw new BusinessException("无权查看该工单");
         }
+    }
+
+    /** triedWorkers 为逗号分隔的维修工ID串, 判断该维修工是否经手过本单 */
+    private boolean isTriedWorker(String triedWorkers, Long userId) {
+        if (!StringUtils.hasText(triedWorkers)) {
+            return false;
+        }
+        String target = String.valueOf(userId);
+        for (String id : triedWorkers.split(",")) {
+            if (target.equals(id.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String actionText(String action) {
@@ -348,8 +436,10 @@ public class OrderService {
             case OrderLog.ACTION_SUBMIT -> "提交报修";
             case OrderLog.ACTION_ASSIGN -> "管理员派单";
             case OrderLog.ACTION_AUTO_ASSIGN -> "智能派单";
-            case OrderLog.ACTION_REASSIGN -> "自动改派";
+            case OrderLog.ACTION_HOLD -> "转人工派单";
+            case OrderLog.ACTION_REASSIGN -> "改派";
             case OrderLog.ACTION_ACCEPT -> "接单确认";
+            case OrderLog.ACTION_REFUSE -> "维修工拒单";
             case OrderLog.ACTION_FINISH -> "维修完成";
             case OrderLog.ACTION_PASS -> "验收通过";
             case OrderLog.ACTION_REJECT -> "验收不通过";
@@ -382,6 +472,28 @@ public class OrderService {
         if (!order.getUserId().equals(userId) && !order.getWorkerId().equals(userId)) {
             throw new BusinessException(message);
         }
+    }
+
+    /** 追加"已尝试过的维修工", 供自动改派避让重复派给同一个人 */
+    private String mergeTried(String tried, Long workerId) {
+        if (!StringUtils.hasText(tried)) {
+            return String.valueOf(workerId);
+        }
+        List<String> ids = new ArrayList<>(List.of(tried.split(",")));
+        String target = String.valueOf(workerId);
+        if (!ids.contains(target)) {
+            ids.add(target);
+        }
+        return String.join(",", ids);
+    }
+
+    /** 取用户姓名, 找不到时退回"用户#id" */
+    private String realNameOf(Long userId) {
+        if (userId == null) {
+            return "未知用户";
+        }
+        User user = userMapper.selectById(userId);
+        return user == null ? ("用户#" + userId) : user.getRealName();
     }
 
     private void addLog(Long orderId, Long operatorId, String action, String remark) {

@@ -16,8 +16,11 @@ public class OrderLog {
     public static final String ACTION_SUBMIT = "SUBMIT";
     public static final String ACTION_ASSIGN = "ASSIGN";
     public static final String ACTION_AUTO_ASSIGN = "AUTO_ASSIGN";
+    /** 自动派单判定未通过, 转人工派单(附原因) */
+    public static final String ACTION_HOLD = "HOLD";
     public static final String ACTION_REASSIGN = "REASSIGN";
     public static final String ACTION_ACCEPT = "ACCEPT";
+    public static final String ACTION_REFUSE = "REFUSE";
     public static final String ACTION_FINISH = "FINISH";
     public static final String ACTION_PASS = "PASS";
     public static final String ACTION_REJECT = "REJECT";

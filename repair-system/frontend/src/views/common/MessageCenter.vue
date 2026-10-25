@@ -25,7 +25,7 @@
       <span class="content">
         {{ msg.content }}
         <el-tag v-if="msg.orderId" size="small" type="info" effect="plain" style="margin-left: 6px">
-          点击查看工单
+          点击查看详情
         </el-tag>
       </span>
       <span class="time">{{ msg.createTime }}</span>
@@ -37,6 +37,7 @@
                    @current-change="load" />
   </el-card>
 
+  <message-detail-dialog ref="msgDetailRef" @view-order="openOrder" />
   <order-detail-dialog ref="detailRef" />
 </template>
 
@@ -44,11 +45,13 @@
 import { onMounted, reactive, ref } from 'vue'
 import { getMessages, readAllMessages, readMessage, getUnreadCount } from '../../api/common'
 import OrderDetailDialog from '../../components/OrderDetailDialog.vue'
+import MessageDetailDialog from '../../components/MessageDetailDialog.vue'
 
 const list = ref([])
 const total = ref(0)
 const unreadTotal = ref(0)
 const detailRef = ref()
+const msgDetailRef = ref()
 const query = reactive({ isRead: null, current: 1, size: 10 })
 
 async function load() {
@@ -68,15 +71,20 @@ async function reload() {
   refreshUnread()
 }
 
-// 点击消息: 标记已读, 若关联了工单则直接打开工单详情
+// 点击消息: 先标记已读(红点消失), 再弹出消息详情
 async function read(msg) {
   if (msg.isRead === 0) {
     await readMessage(msg.id)
     msg.isRead = 1
     refreshUnread()
   }
-  if (msg.orderId) {
-    detailRef.open(msg.orderId)
+  msgDetailRef.value.open(msg)
+}
+
+// 消息弹窗里点"查看工单详情": 关闭消息弹窗, 打开工单详情
+function openOrder(orderId) {
+  if (orderId) {
+    detailRef.value.open(orderId)
   }
 }
 

@@ -21,7 +21,7 @@
           <span v-else style="color:#999">普通</span>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="90"><template #default="{ row }"><status-tag :status="row.status" /></template></el-table-column>
+      <el-table-column label="状态" width="95"><template #default="{ row }"><status-tag :status="row.status" :accept-time="row.workerAcceptTime" /></template></el-table-column>
       <el-table-column prop="workerName" label="维修工" width="90" />
       <el-table-column prop="submitTime" label="提交时间" width="160" />
       <el-table-column label="操作" width="260" fixed="right">

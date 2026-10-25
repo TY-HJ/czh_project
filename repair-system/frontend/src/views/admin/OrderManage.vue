@@ -38,7 +38,9 @@
           <el-tag v-if="row.priority === 'URGENT'" type="danger" size="small">急</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="85"><template #default="{ row }"><status-tag :status="row.status" /></template></el-table-column>
+      <el-table-column label="状态" width="95">
+        <template #default="{ row }"><status-tag :status="row.status" :accept-time="row.workerAcceptTime" /></template>
+      </el-table-column>
       <el-table-column label="时效" width="110">
         <template #default="{ row }">
           <el-tooltip v-if="overdueText(row)" :content="overdueText(row).tip" placement="top">
@@ -55,10 +57,11 @@
         </template>
       </el-table-column>
       <el-table-column prop="submitTime" label="提交时间" width="155" />
-      <el-table-column label="操作" width="250" fixed="right">
+      <el-table-column label="操作" width="270" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="detailRef.open(row.id)">详情</el-button>
           <el-button v-if="row.status === 0" size="small" type="primary" @click="openAssign(row)">派单</el-button>
+          <el-button v-else-if="row.status === 1" size="small" type="primary" plain @click="openAssign(row)">改派</el-button>
           <el-button v-if="row.status === 0 || row.status === 1" size="small" type="warning" @click="urge(row)">催办</el-button>
           <el-button v-if="row.status === 0 || row.status === 1 || row.status === 2" size="small" type="danger" plain @click="close(row)">关闭</el-button>
         </template>
@@ -71,25 +74,29 @@
 
   <order-detail-dialog ref="detailRef" />
 
-  <!-- 派单对话框 -->
-  <el-dialog v-model="assignVisible" title="派单" width="400px">
+  <!-- 派单 / 改派对话框 -->
+  <el-dialog v-model="assignVisible" :title="isReassign ? '改派维修工' : '派单'" width="420px">
+    <el-alert v-if="isReassign" type="warning" :closable="false" show-icon style="margin-bottom: 12px"
+              :title="`当前维修工:${assignRow?.workerName || '未知'}(${assignRow?.workerAcceptTime ? '已接单' : '尚未接单'})`"
+              description="改派后原师傅会收到取消通知,新师傅需重新接单,超时计时重新开始" />
     <el-form label-width="80px">
       <el-form-item label="工单号">{{ assignRow?.orderNo }}</el-form-item>
       <el-form-item label="维修工">
-        <el-select v-model="workerId" placeholder="请选择维修工" style="width: 100%">
-          <el-option v-for="w in workers" :key="w.id" :label="`${w.realName}（${w.phone || '无电话'}）`" :value="w.id" />
+        <el-select v-model="workerId" :placeholder="isReassign ? '请选择新的维修工' : '请选择维修工'" style="width: 100%">
+          <el-option v-for="w in workers" :key="w.id" :label="`${w.realName}（${w.phone || '无电话'}）`"
+                     :value="w.id" :disabled="isReassign && w.id === assignRow?.workerId" />
         </el-select>
       </el-form-item>
     </el-form>
     <template #footer>
       <el-button @click="assignVisible = false">取消</el-button>
-      <el-button type="primary" @click="submitAssign">确认派单</el-button>
+      <el-button type="primary" @click="submitAssign">{{ isReassign ? '确认改派' : '确认派单' }}</el-button>
     </template>
   </el-dialog>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
@@ -110,6 +117,8 @@ const assignVisible = ref(false)
 const assignRow = ref(null)
 const workerId = ref(null)
 const workers = ref([])
+// 处理中的工单再次派单 = 改派(换师傅)
+const isReassign = computed(() => assignRow.value?.status === 1)
 
 async function load() {
   const page = await getAdminOrders(query)
@@ -156,8 +165,9 @@ async function submitAssign() {
     ElMessage.warning('请选择维修工')
     return
   }
+  const reassign = isReassign.value
   await assignOrder(assignRow.value.id, { workerId: workerId.value })
-  ElMessage.success('派单成功,已通知维修工')
+  ElMessage.success(reassign ? '改派成功,已通知新旧两位师傅' : '派单成功,已通知维修工')
   assignVisible.value = false
   load()
   loadCounts()

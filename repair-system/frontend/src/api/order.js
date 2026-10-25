@@ -8,6 +8,8 @@ export const cancelOrder = id => request.put(`/orders/${id}/cancel`)
 
 // 维修工
 export const getWorkerOrders = params => request.get('/orders/worker', { params })
+export const acceptTask = id => request.put(`/orders/${id}/accept`)
+export const refuseOrder = (id, data) => request.put(`/orders/${id}/refuse`, data)
 export const finishOrder = (id, data) => request.put(`/orders/${id}/finish`, data)
 
 // 管理员

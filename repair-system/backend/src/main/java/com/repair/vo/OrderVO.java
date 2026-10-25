@@ -32,6 +32,8 @@ public class OrderVO {
     private String dispatchType;      // AUTO-智能派单 MANUAL-手动派单
     private java.math.BigDecimal dispatchScore; // 派单时综合得分
     private Integer reassignCount;    // 自动改派次数
+    /** 提交工单时的派单结果提示: 转人工时给出原因(仅提交接口返回, 不落库) */
+    private String dispatchHint;
     private LocalDateTime workerAcceptTime; // 维修工接单时间
     private LocalDateTime submitTime;
     private LocalDateTime assignTime;

@@ -7,6 +7,9 @@ export const addUser = data => request.post('/users', data)
 export const updateUser = (id, data) => request.put(`/users/${id}`, data)
 export const toggleUserStatus = id => request.put(`/users/${id}/toggle-status`)
 export const deleteUser = id => request.delete(`/users/${id}`)
+// 维修工技能标签(报修类型ID集合, 全量覆盖)
+export const getWorkerSkills = id => request.get(`/users/${id}/skills`)
+export const saveWorkerSkills = (id, typeIds) => request.put(`/users/${id}/skills`, { typeIds })
 
 // 字典
 export const getTypes = () => request.get('/dict/types')
