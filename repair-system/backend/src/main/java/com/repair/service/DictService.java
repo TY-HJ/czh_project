@@ -36,9 +36,6 @@ public class DictService {
 
     public void addType(RepairType type) {
         type.setId(null);
-        if (type.getAutoDispatch() == null) {
-            type.setAutoDispatch(true);   // 新增类型默认走自动派单
-        }
         typeMapper.insert(type);
     }
 

@@ -44,6 +44,7 @@ public class OrderService {
     private final RepairTypeMapper typeMapper;
     private final LocationMapper locationMapper;
     private final MessageMapper messageMapper;
+    private final WorkerSkillMapper workerSkillMapper;
     private final DispatchService dispatchService;
 
     private static final DateTimeFormatter NO_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
@@ -117,6 +118,19 @@ public class OrderService {
         User worker = userMapper.selectById(workerId);
         if (worker == null || !"WORKER".equals(worker.getRole())) {
             throw new BusinessException("维修工不存在");
+        }
+        // 在岗校验: 禁用账号登录不了, 派给他等于把单丢进黑洞
+        if (worker.getStatus() == null || worker.getStatus() != 1) {
+            throw new BusinessException("该维修工已被禁用,无法派单,请先在用户管理中启用");
+        }
+        // 技能校验: 与自动派单同一口径, 避免把单派给不处理该类故障的师傅
+        Long skillCount = workerSkillMapper.selectCount(new LambdaQueryWrapper<WorkerSkill>()
+                .eq(WorkerSkill::getWorkerId, workerId)
+                .eq(WorkerSkill::getTypeId, order.getTypeId()));
+        if (skillCount == null || skillCount == 0) {
+            RepairType type = typeMapper.selectById(order.getTypeId());
+            String typeName = type == null ? "该类型" : "「" + type.getTypeName() + "」";
+            throw new BusinessException("该师傅未配置" + typeName + "技能,请先在用户管理-技能中补充后派单");
         }
         Long oldWorkerId = order.getWorkerId();
         if (reassign && workerId.equals(oldWorkerId)) {
@@ -260,10 +274,12 @@ public class OrderService {
         } else {
             // 验收不通过:退回处理中,维修工需重新处理
             // 注意: MyBatis-Plus 的 updateById 默认忽略 null 字段,清空完成时间必须用 UpdateWrapper 显式 set null
+            // 同时刷新派单时间: 否则原派单时间早已超过超时阈值, 定时任务会把刚退回的返工单当成超时单改派给他人
             orderMapper.update(null, new LambdaUpdateWrapper<RepairOrder>()
                     .eq(RepairOrder::getId, orderId)
                     .set(RepairOrder::getStatus, RepairOrder.STATUS_PROCESSING)
-                    .set(RepairOrder::getFinishTime, null));
+                    .set(RepairOrder::getFinishTime, null)
+                    .set(RepairOrder::getAssignTime, LocalDateTime.now()));
 
             addLog(orderId, userId, OrderLog.ACTION_REJECT,
                     "验收不通过:" + (StringUtils.hasText(dto.getContent()) ? dto.getContent() : "未说明原因"));
@@ -467,9 +483,11 @@ public class OrderService {
         }
     }
 
-    /** 校验当前用户是否是工单的报修人/维修工 */
+    /** 校验当前用户是否是工单的报修人/维修工(空值安全: 待派单工单的 workerId 为 null) */
     private void checkOwner(RepairOrder order, Long userId, String message) {
-        if (!order.getUserId().equals(userId) && !order.getWorkerId().equals(userId)) {
+        boolean isOwner = userId.equals(order.getUserId());
+        boolean isWorker = userId.equals(order.getWorkerId());
+        if (!isOwner && !isWorker) {
             throw new BusinessException(message);
         }
     }

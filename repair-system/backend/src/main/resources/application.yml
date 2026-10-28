@@ -30,3 +30,15 @@ jwt:
 # 图片上传保存目录: UPLOAD_DIR 支持环境变量, 默认为本项目 backend/uploads 绝对路径
 upload:
   dir: ${UPLOAD_DIR:D:/Workbuddy/work_space/repair-system/backend/uploads}
+
+# AI 辅助填写(暂未启用)
+# 现状: 后端代码与接口已就绪, 前端入口已撤下, 默认关闭(enabled: false), 不影响任何现有功能
+# 将来若要启用: 1) 把 enabled 改为 true  2) 配置环境变量 AI_API_KEY  3) 前端两个表单加回调用按钮
+# 密钥安全: 严禁把 sk-xxx 直接写在这里(会随代码提交到 GitHub), 必须走环境变量
+ai:
+  enabled: false
+  base-url: ${AI_BASE_URL:https://api.deepseek.com}
+  model: ${AI_MODEL:deepseek-chat}
+  api-key: ${AI_API_KEY:}
+  timeout-seconds: 20
+  max-tokens: 400

@@ -18,7 +18,7 @@ const routes = [
       { path: 'order-manage', component: () => import('../views/admin/OrderManage.vue'), meta: { roles: ['ADMIN'], title: '工单管理' } },
       { path: 'dispatch-rule', component: () => import('../views/admin/DispatchRule.vue'), meta: { roles: ['ADMIN'], title: '派单规则' } },
       { path: 'user-manage', component: () => import('../views/admin/UserManage.vue'), meta: { roles: ['ADMIN'], title: '用户管理' } },
-      { path: 'dict-manage', component: () => import('../views/admin/DictManage.vue'), meta: { roles: ['ADMIN'], title: '字典管理' } },
+      { path: 'dict-manage', component: () => import('../views/admin/DictManage.vue'), meta: { roles: ['ADMIN'], title: '报修设置' } },
       { path: 'notice-manage', component: () => import('../views/admin/NoticeManage.vue'), meta: { roles: ['ADMIN'], title: '公告管理' } },
       // 住户
       { path: 'create-order', component: () => import('../views/resident/CreateOrder.vue'), meta: { roles: ['RESIDENT'], title: '提交报修' } },
@@ -27,7 +27,9 @@ const routes = [
       { path: 'task-list', component: () => import('../views/worker/TaskList.vue'), meta: { roles: ['WORKER'], title: '维修任务' } },
       // 公共
       { path: 'messages', component: () => import('../views/common/MessageCenter.vue'), meta: { title: '消息中心' } },
-      { path: 'notices', component: () => import('../views/common/NoticeList.vue'), meta: { title: '公告列表' } }
+      { path: 'notices', component: () => import('../views/common/NoticeList.vue'), meta: { title: '公告列表' } },
+      // 个人中心: 不限定角色, 三种角色都可进入
+      { path: 'profile', component: () => import('../views/common/Profile.vue'), meta: { title: '个人中心' } }
     ]
   },
   { path: '/:pathMatch(.*)*', redirect: '/' }

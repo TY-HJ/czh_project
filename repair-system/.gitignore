@@ -11,6 +11,12 @@ frontend/*.log
 # ---- 运行时数据 ----
 backend/uploads/
 
+# ---- 本地配置(可能含数据库密码/AI密钥, 严禁提交) ----
+backend/src/main/resources/application-local.yml
+**/application-local.yml
+.env
+.env.local
+
 # ---- IDE ----
 .idea/
 *.iml

@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 /**
  * 智能派单子系统(V2.0 核心)
  *
- * 流程: 提交工单 -> 读规则 -> 判定链(总开关/类型开关/技能在岗/满负荷/候选下限)
+ * 流程: 提交工单 -> 读规则 -> 判定链(总开关/技能在岗/未满负荷)
  *      -> 任一不满足转人工(写 HOLD 时间轴并通知管理员)
  *      -> 负荷/历史评分/楼栋熟悉度三维归一化打分(紧急工单放大负荷权重)
  *      -> 得分排序取Top1 -> 带状态条件乐观更新工单(防并发重复派单)
@@ -65,7 +65,6 @@ public class DispatchService {
         def.setWFamiliarity(new BigDecimal("0.25"));
         def.setUrgencyBoost(new BigDecimal("0.50"));
         def.setMaxLoad(5);
-        def.setMinCandidates(1);
         def.setFamiliarityFull(5);
         def.setDefaultRating(new BigDecimal("0.60"));
         def.setReassignLimit(2);
@@ -94,9 +93,6 @@ public class DispatchService {
         if (dto.getMaxLoad() == null || dto.getMaxLoad() < 1) {
             throw new BusinessException("负荷上限必须为正整数");
         }
-        if (dto.getMinCandidates() == null || dto.getMinCandidates() < 1) {
-            throw new BusinessException("可派候选人数下限必须≥1");
-        }
         if (dto.getFamiliarityFull() == null || dto.getFamiliarityFull() < 1) {
             throw new BusinessException("熟悉度满分单数必须为正整数");
         }
@@ -112,7 +108,6 @@ public class DispatchService {
         rule.setWFamiliarity(dto.getWFamiliarity());
         rule.setUrgencyBoost(dto.getUrgencyBoost());
         rule.setMaxLoad(dto.getMaxLoad());
-        rule.setMinCandidates(dto.getMinCandidates());
         rule.setFamiliarityFull(dto.getFamiliarityFull());
         rule.setDefaultRating(dto.getDefaultRating() == null ? new BigDecimal("0.60") : dto.getDefaultRating());
         rule.setReassignLimit(dto.getReassignLimit());
@@ -243,10 +238,8 @@ public class DispatchService {
      *
      * 判定链(任一不满足即转人工, 并写时间轴 + 通知管理员):
      *   1) 自动派单总开关打开
-     *   2) 该报修类型允许自动派单(如电梯故障默认人工)
-     *   3) 存在技能匹配且在岗的维修工
-     *   4) 其中至少有一人未满负荷(未完成工单数 &lt; max_load)
-     *   5) 可派候选人数 ≥ min_candidates
+     *   2) 存在技能匹配且在岗的维修工
+     *   3) 其中至少有一人未满负荷(未完成工单数 &lt; max_load)
      *
      * @return null 表示已自动派出; 非 null 为转人工的原因
      */
@@ -258,33 +251,24 @@ public class DispatchService {
         }
         DispatchRule rule = getRule();
 
-        // 规则1: 全局开关
+        // 条件1: 全局开关
         if (!Boolean.TRUE.equals(rule.getAutoDispatchEnabled())) {
             return hold(order, "自动派单总开关已关闭");
         }
-        // 规则2: 类型级开关(只认显式关闭, 兼容加字段前的老数据)
-        RepairType type = order.getTypeId() == null ? null : typeMapper.selectById(order.getTypeId());
-        if (type != null && Boolean.FALSE.equals(type.getAutoDispatch())) {
-            return hold(order, "「" + type.getTypeName() + "」已设为人工派单");
-        }
-        // 规则3: 技能匹配 + 在岗
+        // 条件2: 技能匹配 + 在岗
         List<CandidateVO> candidates = liveCandidates(order, rule);
         if (candidates.isEmpty()) {
+            RepairType type = order.getTypeId() == null ? null : typeMapper.selectById(order.getTypeId());
             String typeName = type == null ? "" : type.getTypeName();
             return hold(order, "暂无技能匹配的在岗维修工" + (typeName.isEmpty() ? "" : "(" + typeName + ")"));
         }
-        // 规则4: 满负荷的师傅不参与自动派单, 避免把单压给已经忙不过来的师傅
+        // 条件3: 满负荷的师傅不参与自动派单, 避免把单压给已经忙不过来的师傅
         int maxLoad = rule.getMaxLoad();
         List<CandidateVO> available = candidates.stream()
                 .filter(c -> c.getCurrentLoad() == null || c.getCurrentLoad() < maxLoad)
                 .collect(Collectors.toList());
         if (available.isEmpty()) {
             return hold(order, "技能匹配的维修工均已满负荷(上限" + maxLoad + "单)");
-        }
-        // 规则5: 可派候选人数下限
-        int minCandidates = rule.getMinCandidates() == null ? 1 : rule.getMinCandidates();
-        if (available.size() < minCandidates) {
-            return hold(order, "可派候选仅" + available.size() + "人,低于设定下限" + minCandidates + "人");
         }
 
         CandidateVO top = available.get(0);
@@ -358,12 +342,6 @@ public class DispatchService {
     @Transactional
     public boolean autoReassign(RepairOrder order) {
         DispatchRule rule = getRule();
-        // 类型设为人工派单的(如电梯故障), 超时也不自动改派, 交由管理员处理
-        RepairType type = order.getTypeId() == null ? null : typeMapper.selectById(order.getTypeId());
-        if (type != null && Boolean.FALSE.equals(type.getAutoDispatch())) {
-            notifyAdmins("工单【" + order.getOrderNo() + "】处理超时未完成,该类型为人工派单,请人工介入");
-            return false;
-        }
         // 超过改派上限: 转人工
         if (order.getReassignCount() != null && order.getReassignCount() >= rule.getReassignLimit()) {
             notifyAdmins("工单【" + order.getOrderNo() + "】已自动改派" + order.getReassignCount()

@@ -37,7 +37,8 @@
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+                <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -76,9 +77,10 @@ const menus = computed(() => {
       { path: '/order-manage', title: '工单管理', icon: 'Tickets' },
       { path: '/dispatch-rule', title: '派单规则', icon: 'Operation' },
       { path: '/user-manage', title: '用户管理', icon: 'User' },
-      { path: '/dict-manage', title: '字典管理', icon: 'Menu' },
+      { path: '/dict-manage', title: '报修设置', icon: 'Setting' },
       { path: '/notice-manage', title: '公告管理', icon: 'Bell' },
-      { path: '/messages', title: '消息中心', icon: 'ChatDotRound' }
+      { path: '/messages', title: '消息中心', icon: 'ChatDotRound' },
+      { path: '/profile', title: '个人中心', icon: 'Avatar' }
     ]
   }
   if (store.role === 'RESIDENT') {
@@ -86,14 +88,16 @@ const menus = computed(() => {
       { path: '/create-order', title: '提交报修', icon: 'EditPen' },
       { path: '/my-orders', title: '我的报修', icon: 'Tickets' },
       { path: '/messages', title: '消息中心', icon: 'ChatDotRound' },
-      { path: '/notices', title: '公告列表', icon: 'Document' }
+      { path: '/notices', title: '公告列表', icon: 'Document' },
+      { path: '/profile', title: '个人中心', icon: 'Avatar' }
     ]
   }
   if (store.role === 'WORKER') {
     return [
       { path: '/task-list', title: '维修任务', icon: 'Tools' },
       { path: '/messages', title: '消息中心', icon: 'ChatDotRound' },
-      { path: '/notices', title: '公告列表', icon: 'Document' }
+      { path: '/notices', title: '公告列表', icon: 'Document' },
+      { path: '/profile', title: '个人中心', icon: 'Avatar' }
     ]
   }
   return []
@@ -103,6 +107,10 @@ function handleCommand(cmd) {
   if (cmd === 'logout') {
     store.logout()
     router.push('/login')
+    return
+  }
+  if (cmd === 'profile') {
+    router.push('/profile')
   }
 }
 

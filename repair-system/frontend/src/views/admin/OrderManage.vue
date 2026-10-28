@@ -83,9 +83,13 @@
       <el-form-item label="工单号">{{ assignRow?.orderNo }}</el-form-item>
       <el-form-item label="维修工">
         <el-select v-model="workerId" :placeholder="isReassign ? '请选择新的维修工' : '请选择维修工'" style="width: 100%">
-          <el-option v-for="w in workers" :key="w.id" :label="`${w.realName}（${w.phone || '无电话'}）`"
-                     :value="w.id" :disabled="isReassign && w.id === assignRow?.workerId" />
+          <el-option v-for="w in workers" :key="w.id"
+                     :label="`${w.realName}（${w.phone || '无电话'}）${w.status === 1 ? '' : ' · 已禁用'}`"
+                     :value="w.id" :disabled="(isReassign && w.id === assignRow?.workerId) || w.status !== 1" />
         </el-select>
+        <div style="font-size: 12px; color: #909399; margin-top: 4px; line-height: 1.5">
+          仅可派给在岗且已配置该报修类型技能的师傅，技能在「用户管理 → 技能」中维护
+        </div>
       </el-form-item>
     </el-form>
     <template #footer>
@@ -154,9 +158,8 @@ function overdueText(row) {
 async function openAssign(row) {
   assignRow.value = row
   workerId.value = null
-  if (workers.value.length === 0) {
-    workers.value = await getUsersByRole('WORKER')
-  }
+  // 每次打开都重新拉取: 管理员可能刚禁用/启用过维修工, 用缓存会派给已禁用账号
+  workers.value = await getUsersByRole('WORKER')
   assignVisible.value = true
 }
 

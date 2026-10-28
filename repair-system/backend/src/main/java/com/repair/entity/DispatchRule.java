@@ -23,8 +23,6 @@ public class DispatchRule {
     private BigDecimal wFamiliarity;
     private BigDecimal urgencyBoost;
     private Integer maxLoad;
-    /** 可派候选人数下限: 技能匹配且未满负荷的候选少于该值时转人工 */
-    private Integer minCandidates;
     private Integer familiarityFull;
     private BigDecimal defaultRating;
     private Integer reassignLimit;
