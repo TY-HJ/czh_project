@@ -18,7 +18,23 @@
       </el-form-item>
       <el-form-item label="详细描述">
         <el-input v-model="form.description" type="textarea" :rows="4"
-                  placeholder="补充说明,如:什么时候开始的、影响了什么" />
+                  placeholder="补充说明,如:什么时候开始的、影响了什么"
+                  @input="undoState = null" />
+        <div v-if="undoState" class="undo-bar">
+          <span>已换成新的示例，你刚才改的内容已暂存</span>
+          <el-button link type="primary" size="small" @click="undoApply">撤销</el-button>
+        </div>
+        <div v-if="reportTemplates.length" class="tpl-box">
+          <div class="tpl-head">
+            <el-icon><MagicStick /></el-icon>
+            <span>常用写法（点一下自动填入，再按实际情况改）</span>
+          </div>
+          <div class="tpl-list">
+            <el-tag v-for="(t, i) in reportTemplates" :key="i" class="tpl-tag"
+                    :type="i === activeTpl ? 'primary' : 'info'" effect="plain" round
+                    @click="applyTemplate(t, i)">{{ t.title }}</el-tag>
+          </div>
+        </div>
       </el-form-item>
       <el-form-item label="紧急程度">
         <el-radio-group v-model="form.priority">
@@ -43,11 +59,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { createOrder, uploadUrl } from '../../api/order'
 import { getTypes, getLocations } from '../../api/user'
+import { getReportTemplates } from '../../utils/suggest'
 
 const router = useRouter()
 const formRef = ref()
@@ -68,6 +85,51 @@ const rules = {
   locationId: [{ required: true, message: '请选择位置', trigger: 'change' }],
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }]
 }
+
+// ===== 辅助填写：按报修类型预填描述（本地词库，不调用任何接口） =====
+const currentTypeName = computed(() => {
+  const t = types.value.find(x => x.id === form.typeId)
+  return t ? t.typeName : ''
+})
+const reportTemplates = computed(() => getReportTemplates(currentTypeName.value))
+// 记录自动填入过的内容，切换类型时不覆盖住户自己写的内容
+const autoFill = reactive({ desc: '', title: '' })
+const activeTpl = ref(0)
+// 覆盖前暂存住户改过的内容，供撤销
+const undoState = ref(null)
+
+function applyTemplate(tpl, index) {
+  // 手改过就先存一份，点「撤销」可以拿回来
+  if (form.description.trim() && form.description.trim() !== autoFill.desc.trim()) {
+    undoState.value = { desc: form.description, title: form.title }
+  }
+  form.description = tpl.desc
+  autoFill.desc = tpl.desc
+  if (!form.title.trim() || form.title === autoFill.title) {
+    form.title = tpl.title
+    autoFill.title = tpl.title
+  }
+  if (typeof index === 'number') activeTpl.value = index
+}
+
+function undoApply() {
+  if (!undoState.value) return
+  form.description = undoState.value.desc
+  form.title = undoState.value.title
+  autoFill.desc = ''
+  autoFill.title = ''
+  activeTpl.value = -1
+  undoState.value = null
+}
+
+// 选定类型后自动预填第一条例句
+watch(() => form.typeId, () => {
+  const list = reportTemplates.value
+  if (!list.length) return
+  if (!form.description.trim() || form.description === autoFill.desc) {
+    applyTemplate(list[0], 0)
+  }
+})
 
 onMounted(async () => {
   types.value = await getTypes()
@@ -112,3 +174,49 @@ async function submit() {
   }
 }
 </script>
+
+<style scoped>
+.undo-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.tpl-box {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #f6f8fb;
+  border: 1px dashed #dcdfe6;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.tpl-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.tpl-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tpl-tag {
+  cursor: pointer;
+}
+
+.tpl-tag:hover {
+  color: #409eff;
+  border-color: #409eff;
+}
+</style>

@@ -24,6 +24,9 @@
             <span v-if="order.dispatchType === 'AUTO'">智能派单</span>
             <span v-else-if="order.dispatchType === 'MANUAL'">管理员派单</span>
             <span v-else>-</span>
+            <span v-if="order.dispatchType === 'AUTO' && order.dispatchScore != null" style="color: #909399">
+              （综合得分 {{ order.dispatchScore }}）
+            </span>
             <span v-if="order.reassignCount > 0" style="color: #E6A23C">（已改派 {{ order.reassignCount }} 次）</span>
           </el-descriptions-item>
           <el-descriptions-item label="提交时间">{{ order.submitTime || '-' }}</el-descriptions-item>

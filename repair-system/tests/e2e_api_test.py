@@ -140,7 +140,8 @@ expect_fail("未携带 token 访问 /auth/me 被拒", api("GET", "/api/auth/me")
 print("\n[模块2] 字典")
 types = expect_ok("报修类型列表", api("GET", "/api/dict/types", token=zs_token))
 locs = expect_ok("位置列表", api("GET", "/api/dict/locations", token=zs_token))
-type_id = types[0]["id"] if types else None
+type_id = next((t["id"] for t in (types or []) if t.get("typeName") == "门禁系统"),
+               types[0]["id"] if types else None)
 loc_id = locs[0]["id"] if locs else None
 check("字典数据非空(可建单)", bool(type_id and loc_id), {"typeId": type_id, "locationId": loc_id})
 
@@ -157,7 +158,7 @@ expect_fail("住户访问管理员工单分页被拒", api("GET", "/api/orders/p
 expect_fail("维修工访问管理员工单分页被拒", api("GET", "/api/orders/page", token=lisi_token))
 expect_fail("住户访问统计大屏被拒", api("GET", "/api/stats/overview", token=zs_token))
 expect_fail("住户调用派单接口被拒", api("PUT", "/api/orders/1/assign", token=zs_token, payload={"workerId": lisi_id}))
-expect_fail("住户访问智能派单候选被拒", api("GET", "/api/dispatch/candidates/1", token=zs_token))
+expect_fail("住户访问智能派单候选被拒", api("GET", "/api/dispatch/assign-candidates/1", token=zs_token))
 
 # ---------- 5. 工单状态机完整流转(V2.0 自动派单) ----------
 print("\n[模块5] 工单状态机完整流转(自动派单)")
@@ -180,9 +181,10 @@ expect_fail("派单给住户被拒(维修工不存在)", api("PUT", "/api/orders
 expect_fail("派给当前维修工被拒(无需重复派单)", api("PUT", "/api/orders/%d/assign" % oid, token=admin_token,
                                             payload={"workerId": order.get("workerId")}))
 # V3.1/A2: 改派给其他师傅 -> 再改派回来, 验证改派通道可用且不破坏后续接单流程
+# 注意: 王师傅没有"门禁系统"技能, 需带 force=true 走强制派单(这正是 A3 加的口子)
 if ww and ww.get("id") != order.get("workerId"):
-    expect_ok("处理中工单可改派给其他维修工", api("PUT", "/api/orders/%d/assign" % oid, token=admin_token,
-                                        payload={"workerId": ww.get("id")}))
+    expect_ok("处理中工单可强制改派给无该技能的师傅", api("PUT", "/api/orders/%d/assign" % oid, token=admin_token,
+                                            payload={"workerId": ww.get("id"), "force": True}))
     re_assigned = find_order(admin_token, "E2E-A" + TS)
     check("改派后维修工已变更", bool(re_assigned) and re_assigned.get("workerId") == ww.get("id"),
           re_assigned and re_assigned.get("workerId"))
@@ -302,7 +304,7 @@ for path, name in [("/api/stats/overview", "总览"), ("/api/stats/type-distribu
 
 # ---------- 8. 智能派单 ----------
 print("\n[模块8] 智能派单")
-cands = expect_ok("管理员查看派单候选", api("GET", "/api/dispatch/candidates/%d" % oid, token=admin_token))
+cands = expect_ok("管理员查看派单候选", api("GET", "/api/dispatch/assign-candidates/%d" % oid, token=admin_token))
 check("候选列表包含 lisi", bool(cands) and any(
     (c.get("workerId") == lisi_id or c.get("id") == lisi_id) for c in cands), cands)
 expect_ok("查看派单规则", api("GET", "/api/dispatch/rule", token=admin_token))

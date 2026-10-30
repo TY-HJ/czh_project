@@ -71,7 +71,7 @@ public class OrderController {
     @PreAuthorize("hasRole('ADMIN')")
     @AuditLog(module = "工单管理", action = "派单/改派")
     public Result<Void> assign(@PathVariable Long id, @Valid @RequestBody AssignDTO dto, Authentication auth) {
-        orderService.assign(id, (Long) auth.getPrincipal(), dto.getWorkerId());
+        orderService.assign(id, (Long) auth.getPrincipal(), dto.getWorkerId(), dto.getForce());
         return Result.ok();
     }
 

@@ -2,7 +2,6 @@ package com.repair.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.repair.common.BusinessException;
 import com.repair.entity.*;
 import com.repair.mapper.*;
@@ -44,9 +43,8 @@ public class DispatchService {
     private final RepairTypeMapper typeMapper;
     private final OrderLogMapper logMapper;
     private final MessageMapper messageMapper;
-    private final ObjectMapper objectMapper;
 
-    /** 得分明细JSON中各分项的字段名(供前端展示) */
+    /** 派单方式 */
     public static final String TYPE_AUTO = "AUTO";
     public static final String TYPE_MANUAL = "MANUAL";
 
@@ -69,7 +67,6 @@ public class DispatchService {
         def.setDefaultRating(new BigDecimal("0.60"));
         def.setReassignLimit(2);
         def.setReassignHours(48);
-        def.setTopN(5);
         return def;
     }
 
@@ -112,7 +109,6 @@ public class DispatchService {
         rule.setDefaultRating(dto.getDefaultRating() == null ? new BigDecimal("0.60") : dto.getDefaultRating());
         rule.setReassignLimit(dto.getReassignLimit());
         rule.setReassignHours(dto.getReassignHours());
-        rule.setTopN(dto.getTopN() == null || dto.getTopN() < 1 ? 5 : dto.getTopN());
         if (rule.getId() == null) {
             ruleMapper.insert(rule);
         } else {
@@ -194,17 +190,19 @@ public class DispatchService {
         vo.setRatingScore(round2(ratingScore));
 
         // 3) 楼栋熟悉度分: 该维修工在工单所在楼栋的历史已完成工单数
+        //    注意数的是"工单数"而不是"去过几个房间": 同一房间修过多次也累加, 才符合熟悉度语义
         int familiar = 0;
         if (building != null) {
-            List<Long> locIds = orderMapper.selectList(new LambdaQueryWrapper<RepairOrder>()
-                            .eq(RepairOrder::getWorkerId, worker.getId())
-                            .eq(RepairOrder::getStatus, RepairOrder.STATUS_COMPLETED)
-                            .select(RepairOrder::getLocationId))
-                    .stream().map(RepairOrder::getLocationId).filter(Objects::nonNull).distinct().toList();
-            for (Long locId : locIds) {
-                if (building.equals(buildingOf(locId))) {
-                    familiar++;
-                }
+            List<Long> sameBuildingLocIds = locationMapper.selectList(new LambdaQueryWrapper<Location>()
+                            .eq(Location::getBuilding, building)
+                            .select(Location::getId))
+                    .stream().map(Location::getId).toList();
+            if (!sameBuildingLocIds.isEmpty()) {
+                Long cnt = orderMapper.selectCount(new LambdaQueryWrapper<RepairOrder>()
+                        .eq(RepairOrder::getWorkerId, worker.getId())
+                        .eq(RepairOrder::getStatus, RepairOrder.STATUS_COMPLETED)
+                        .in(RepairOrder::getLocationId, sameBuildingLocIds));
+                familiar = cnt == null ? 0 : cnt.intValue();
             }
         }
         vo.setFamiliarCount(familiar);
@@ -273,9 +271,6 @@ public class DispatchService {
 
         CandidateVO top = available.get(0);
 
-        // TopN 得分明细 JSON 存档("当时为什么选他")
-        String detailJson = buildScoreDetailJson(available, rule.getTopN());
-
         // 带状态条件的乐观更新: 仅当工单仍处于"待派单"才更新, 防并发重复派单
         int rows = orderMapper.update(null, new LambdaUpdateWrapper<RepairOrder>()
                 .eq(RepairOrder::getId, orderId)
@@ -285,7 +280,6 @@ public class DispatchService {
                 .set(RepairOrder::getAssignTime, LocalDateTime.now())
                 .set(RepairOrder::getDispatchType, TYPE_AUTO)
                 .set(RepairOrder::getDispatchScore, BigDecimal.valueOf(top.getTotalScore()))
-                .set(RepairOrder::getScoreDetail, detailJson)
                 .set(RepairOrder::getReassignCount, 0)
                 .set(RepairOrder::getTriedWorkers, String.valueOf(top.getWorkerId())));
         if (rows == 0) {
@@ -308,28 +302,6 @@ public class DispatchService {
         notifyAdmins("工单【" + order.getOrderNo() + "】未自动派单(" + reason + "),请人工派单");
         log.info("工单{}转人工派单: {}", order.getOrderNo(), reason);
         return reason;
-    }
-
-    /** TopN 得分明细JSON(供管理端回看"当时为什么选他") */
-    private String buildScoreDetailJson(List<CandidateVO> candidates, int topN) {
-        List<Map<String, Object>> list = candidates.stream().limit(topN).map(c -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("workerId", c.getWorkerId());
-            m.put("workerName", c.getWorkerName());
-            m.put("loadScore", c.getLoadScore());
-            m.put("ratingScore", c.getRatingScore());
-            m.put("famScore", c.getFamScore());
-            m.put("totalScore", c.getTotalScore());
-            m.put("currentLoad", c.getCurrentLoad());
-            m.put("avgRating", c.getAvgRating());
-            m.put("familiarCount", c.getFamiliarCount());
-            return m;
-        }).collect(Collectors.toList());
-        try {
-            return objectMapper.writeValueAsString(list);
-        } catch (Exception e) {
-            return "[]";
-        }
     }
 
     // ==================== 自动改派 ====================
@@ -375,7 +347,6 @@ public class DispatchService {
                 .set(RepairOrder::getAssignTime, LocalDateTime.now())   // 刷新派单时间
                 .set(RepairOrder::getWorkerAcceptTime, null)            // 新维修工需重新接单
                 .set(RepairOrder::getDispatchScore, BigDecimal.valueOf(next.getTotalScore()))
-                .set(RepairOrder::getScoreDetail, buildScoreDetailJson(candidates, rule.getTopN()))
                 .set(RepairOrder::getReassignCount, (order.getReassignCount() == null ? 0 : order.getReassignCount()) + 1)
                 .set(RepairOrder::getTriedWorkers, triedStr));
         if (rows == 0) {
@@ -407,29 +378,60 @@ public class DispatchService {
         return set;
     }
 
-    // ==================== 得分明细回读 ====================
+    // ==================== 管理员派单弹窗数据源 ====================
 
     /**
-     * 派单弹窗数据源:
-     * 待派单工单 -> 实时打分; 已派单工单 -> 回读存档明细
+     * 派单弹窗候选列表: 所有在岗维修工 + 技能是否匹配 + 实时三维得分。
+     *
+     * 与 liveCandidates 的区别: 这里不把"缺技能""已满负荷"的人过滤掉,
+     * 而是打上标记交给管理员判断 —— 否则某类型只有一人会修、他又休假时,
+     * 弹窗会是空的, 工单永远派不出去。
      */
-    public List<Map<String, Object>> candidatesFor(Long orderId) {
+    public List<Map<String, Object>> assignCandidates(Long orderId) {
         RepairOrder order = orderMapper.selectById(orderId);
         if (order == null) {
             throw new BusinessException("工单不存在");
         }
-        if (order.getStatus() == RepairOrder.STATUS_PENDING_DISPATCH) {
-            return objectMapper.convertValue(liveCandidates(order, getRule()), List.class);
+        DispatchRule rule = getRule();
+        Set<Long> skilledIds = workerSkillMapper.selectList(new LambdaQueryWrapper<WorkerSkill>()
+                        .eq(WorkerSkill::getTypeId, order.getTypeId()))
+                .stream().map(WorkerSkill::getWorkerId).collect(Collectors.toSet());
+
+        String building = buildingOf(order.getLocationId());
+        BigDecimal wLoad = rule.getWLoad();
+        if ("URGENT".equals(order.getPriority())) {
+            wLoad = wLoad.multiply(BigDecimal.ONE.add(rule.getUrgencyBoost()));
         }
-        // 已派单: 解析存档JSON; 无存档(旧数据)返回空
-        if (order.getScoreDetail() == null || order.getScoreDetail().isBlank()) {
-            return new ArrayList<>();
+
+        List<User> workers = userMapper.selectList(new LambdaQueryWrapper<User>()
+                .eq(User::getRole, "WORKER").eq(User::getStatus, 1));
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (User w : workers) {
+            CandidateVO vo = scoreCandidate(w, building, rule, wLoad);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("workerId", vo.getWorkerId());
+            m.put("workerName", vo.getWorkerName());
+            m.put("phone", vo.getPhone());
+            m.put("currentLoad", vo.getCurrentLoad());
+            m.put("avgRating", vo.getAvgRating());
+            m.put("familiarCount", vo.getFamiliarCount());
+            m.put("loadScore", vo.getLoadScore());
+            m.put("ratingScore", vo.getRatingScore());
+            m.put("famScore", vo.getFamScore());
+            m.put("totalScore", vo.getTotalScore());
+            m.put("skillMatched", skilledIds.contains(w.getId()));
+            m.put("overload", vo.getCurrentLoad() != null && vo.getCurrentLoad() >= rule.getMaxLoad());
+            m.put("currentWorker", w.getId().equals(order.getWorkerId()));
+            result.add(m);
         }
-        try {
-            return objectMapper.readValue(order.getScoreDetail(), List.class);
-        } catch (Exception e) {
-            return new ArrayList<>();
-        }
+
+        // 排序: 技能匹配优先 -> 当前指派人(改派时)靠后, 避免误选原人 -> 综合得分从高到低
+        result.sort(Comparator
+                .comparingInt((Map<String, Object> m) -> Boolean.TRUE.equals(m.get("skillMatched")) ? 0 : 1)
+                .thenComparingInt(m -> Boolean.TRUE.equals(m.get("currentWorker")) ? 1 : 0)
+                .thenComparingDouble(m -> -((Number) m.get("totalScore")).doubleValue()));
+        return result;
     }
 
     // ==================== 私有工具 ====================

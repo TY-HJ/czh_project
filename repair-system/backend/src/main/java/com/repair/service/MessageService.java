@@ -2,6 +2,7 @@ package com.repair.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.repair.common.BusinessException;
 import com.repair.entity.Message;
 import com.repair.entity.RepairOrder;
 import com.repair.mapper.MessageMapper;
@@ -99,5 +100,24 @@ public class MessageService {
             msg.setIsRead(1);
             messageMapper.updateById(msg);
         }
+    }
+
+    /** 删除一条消息(只能删自己的); 已删除时静默返回, 保证重复点击不报错 */
+    public void delete(Long id, Long userId) {
+        Message msg = messageMapper.selectById(id);
+        if (msg == null) {
+            return;
+        }
+        if (!msg.getReceiverId().equals(userId)) {
+            throw new BusinessException("无权删除该消息");
+        }
+        messageMapper.deleteById(id);
+    }
+
+    /** 清空自己的已读消息, 未读保留; 返回删除条数 */
+    public int clearRead(Long userId) {
+        return messageMapper.delete(new LambdaQueryWrapper<Message>()
+                .eq(Message::getReceiverId, userId)
+                .eq(Message::getIsRead, 1));
     }
 }

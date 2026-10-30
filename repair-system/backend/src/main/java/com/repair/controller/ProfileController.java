@@ -63,12 +63,9 @@ public class ProfileController {
         if (!passwordEncoder.matches(dto.getOldPassword(), user.getPassword())) {
             throw new BusinessException("旧密码不正确");
         }
-        // 显式置空锁定计数(改密成功视为账号安全恢复)
         userMapper.update(null, new LambdaUpdateWrapper<User>()
                 .eq(User::getId, user.getId())
-                .set(User::getPassword, passwordEncoder.encode(dto.getNewPassword()))
-                .set(User::getLoginFailCount, 0)
-                .set(User::getLockUntil, null));
+                .set(User::getPassword, passwordEncoder.encode(dto.getNewPassword())));
         return Result.ok();
     }
 

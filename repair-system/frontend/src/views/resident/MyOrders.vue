@@ -79,7 +79,7 @@ const query = reactive({ status: null, current: 1, size: 10 })
 
 const acceptVisible = ref(false)
 const acceptOrderId = ref(null)
-const acceptForm = reactive({ pass: true, score: 5, content: '' })
+const acceptForm = reactive({ pass: true, score: 0, content: '' })
 
 async function load() {
   const page = await getMyOrders(query)
@@ -103,7 +103,8 @@ async function cancel(row) {
 function openAccept(row) {
   acceptOrderId.value = row.id
   acceptForm.pass = true
-  acceptForm.score = 5
+  // 默认 0 星: 必须住户自己选, 避免不选就直接提交导致全是 5 星好评
+  acceptForm.score = 0
   acceptForm.content = ''
   acceptVisible.value = true
 }

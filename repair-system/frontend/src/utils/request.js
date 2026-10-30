@@ -27,8 +27,13 @@ request.interceptors.response.use(
   response => {
     const res = response.data
     if (res.code !== 200) {
-      ElMessage.error(res.msg || '请求失败')
-      return Promise.reject(new Error(res.msg || '请求失败'))
+      // 4001 技能不匹配: 由派单弹窗自己弹"是否强制派单", 这里不抢先报错
+      if (res.code !== 4001) {
+        ElMessage.error(res.msg || '请求失败')
+      }
+      const err = new Error(res.msg || '请求失败')
+      err.code = res.code
+      return Promise.reject(err)
     }
     return res.data
   },

@@ -43,4 +43,17 @@ public class MessageController {
         messageService.markRead(id, (Long) auth.getPrincipal());
         return Result.ok();
     }
+
+    /** 清空已读消息(未读保留), 返回删除条数。注意: 放在 /{id} 之前, 避免被当成 id */
+    @DeleteMapping("/clear-read")
+    public Result<Integer> clearRead(Authentication auth) {
+        return Result.ok(messageService.clearRead((Long) auth.getPrincipal()));
+    }
+
+    /** 删除一条消息(只能删自己的) */
+    @DeleteMapping("/{id}")
+    public Result<Void> delete(@PathVariable Long id, Authentication auth) {
+        messageService.delete(id, (Long) auth.getPrincipal());
+        return Result.ok();
+    }
 }

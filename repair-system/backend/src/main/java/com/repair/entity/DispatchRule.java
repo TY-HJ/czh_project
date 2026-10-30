@@ -27,5 +27,4 @@ public class DispatchRule {
     private BigDecimal defaultRating;
     private Integer reassignLimit;
     private Integer reassignHours;
-    private Integer topN;
 }

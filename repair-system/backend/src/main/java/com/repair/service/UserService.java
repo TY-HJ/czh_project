@@ -1,7 +1,6 @@
 package com.repair.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.repair.common.BusinessException;
 import com.repair.dto.RegisterDTO;
@@ -17,8 +16,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
@@ -33,38 +30,20 @@ public class UserService {
     private final JwtUtil jwtUtil;
     private final BCryptPasswordEncoder passwordEncoder;
 
-    /** 连续失败多少次触发锁定 */
-    private static final int MAX_FAIL_COUNT = 5;
-    /** 锁定时长(分钟) */
-    private static final int LOCK_MINUTES = 10;
-
     /**
-     * 登录(带锁定策略):
-     * 同一账号连续5次密码错误后锁定10分钟; 提示不区分"用户不存在/密码错误"防账号枚举; 成功后失败计数清零
+     * 登录: 失败只返回统一错误提示, 不做失败计数与账号锁定
+     * (物业内部系统, 锁了住户反而只能找管理员, 收益不大)
+     * 提示不区分"用户不存在/密码错误", 避免被用来试探哪些账号存在
      */
     public LoginVO login(String username, String rawPassword) {
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getUsername, username));
         if (user == null || !passwordEncoder.matches(rawPassword, user.getPassword())) {
-            if (user != null) {
-                recordLoginFail(user);
-            }
-            // 统一提示, 不暴露账号是否存在
             throw new BusinessException("用户名或密码错误");
         }
-        // 锁定中(密码正确也拦截): 提示剩余等待时间
-        if (user.getLockUntil() != null && user.getLockUntil().isAfter(LocalDateTime.now())) {
-            long minutes = (long) Math.ceil(ChronoUnit.SECONDS.between(LocalDateTime.now(), user.getLockUntil()) / 60.0);
-            throw new BusinessException("账号已锁定,请" + Math.max(minutes, 1) + "分钟后再试");
-        }
-        if (user.getStatus() == 0) {
+        if (user.getStatus() != null && user.getStatus() == 0) {
             throw new BusinessException("账号已被禁用,请联系管理员");
         }
-        // 登录成功: 清零失败计数并解除锁定(显式set null, updateById会忽略null字段)
-        userMapper.update(null, new LambdaUpdateWrapper<User>()
-                .eq(User::getId, user.getId())
-                .set(User::getLoginFailCount, 0)
-                .set(User::getLockUntil, null));
 
         LoginVO vo = new LoginVO();
         vo.setToken(jwtUtil.generate(user.getId(), user.getRole()));
@@ -74,20 +53,6 @@ public class UserService {
         vo.setRole(user.getRole());
         vo.setAvatar(user.getAvatar());
         return vo;
-    }
-
-    /** 记录一次登录失败; 连续第5次错误时锁定10分钟并清零计数 */
-    private void recordLoginFail(User user) {
-        int fails = (user.getLoginFailCount() == null ? 0 : user.getLoginFailCount()) + 1;
-        LambdaUpdateWrapper<User> uw = new LambdaUpdateWrapper<User>()
-                .eq(User::getId, user.getId());
-        if (fails >= MAX_FAIL_COUNT) {
-            uw.set(User::getLoginFailCount, 0)
-                    .set(User::getLockUntil, LocalDateTime.now().plusMinutes(LOCK_MINUTES));
-        } else {
-            uw.set(User::getLoginFailCount, fails);
-        }
-        userMapper.update(null, uw);
     }
 
     /** 住户自行注册 */

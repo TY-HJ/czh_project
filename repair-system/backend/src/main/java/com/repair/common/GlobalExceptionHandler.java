@@ -16,7 +16,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public Result<Void> handleBusiness(BusinessException e) {
-        return Result.fail(e.getMessage());
+        return Result.fail(e.getCode(), e.getMessage());
     }
 
     @ExceptionHandler(AccessDeniedException.class)

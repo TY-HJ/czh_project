@@ -19,7 +19,5 @@ public class User {
     private String role;        // RESIDENT(住户) / WORKER / ADMIN
     private String avatar;
     private Integer status;     // 1正常 0禁用
-    private Integer loginFailCount; // 连续登录失败次数
-    private LocalDateTime lockUntil; // 登录锁定截止时间
     private LocalDateTime createTime;
 }

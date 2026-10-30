@@ -45,6 +45,9 @@ public class StatsService {
                 new LambdaQueryWrapper<RepairOrder>().eq(RepairOrder::getStatus, 2)));
         result.put("completed", orderMapper.selectCount(
                 new LambdaQueryWrapper<RepairOrder>().eq(RepairOrder::getStatus, 3)));
+        // 已关闭也必须有计数: 否则"总数"比下面各状态之和多, 大屏数字对不上
+        result.put("closed", orderMapper.selectCount(
+                new LambdaQueryWrapper<RepairOrder>().eq(RepairOrder::getStatus, 4)));
 
         // 平均处理时长:完成工单的 (完成时间-提交时间) 平均小时数
         List<RepairOrder> completed = orderMapper.selectList(new LambdaQueryWrapper<RepairOrder>()

@@ -5,6 +5,8 @@ export const getMessages = params => request.get('/messages', { params })
 export const getUnreadCount = () => request.get('/messages/unread-count')
 export const readAllMessages = () => request.put('/messages/read-all')
 export const readMessage = id => request.put(`/messages/${id}/read`)
+export const deleteMessage = id => request.delete(`/messages/${id}`)
+export const clearReadMessages = () => request.delete('/messages/clear-read')
 
 // 公告
 export const getNoticePage = params => request.get('/notices/page', { params })

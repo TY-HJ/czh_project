@@ -25,8 +25,6 @@ CREATE TABLE `user` (
   `role`        VARCHAR(20)  NOT NULL COMMENT '角色: RESIDENT-住户 WORKER-维修工 ADMIN-管理员',
   `avatar`      VARCHAR(255) DEFAULT NULL COMMENT '头像URL',
   `status`      TINYINT NOT NULL DEFAULT 1 COMMENT '状态: 1-正常 0-禁用',
-  `login_fail_count` INT NOT NULL DEFAULT 0 COMMENT '连续登录失败次数',
-  `lock_until`  DATETIME DEFAULT NULL COMMENT '锁定截止时间',
   `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_username` (`username`)
@@ -67,7 +65,6 @@ CREATE TABLE `repair_order` (
   `handle_note` TEXT COMMENT '维修工处理说明',
   `dispatch_type` VARCHAR(10) DEFAULT NULL COMMENT '派单方式: AUTO-智能派单 MANUAL-手动派单',
   `dispatch_score` DECIMAL(5,2) DEFAULT NULL COMMENT '派单时Top1综合得分',
-  `score_detail` TEXT DEFAULT NULL COMMENT '派单时TopN候选人得分明细JSON',
   `reassign_count` INT NOT NULL DEFAULT 0 COMMENT '自动改派次数',
   `tried_workers` VARCHAR(500) DEFAULT NULL COMMENT '已尝试维修工ID,逗号分隔',
   `worker_accept_time` DATETIME DEFAULT NULL COMMENT '维修工接单确认时间',
@@ -150,7 +147,6 @@ CREATE TABLE `dispatch_rule` (
   `default_rating`        DECIMAL(4,2) NOT NULL DEFAULT 0.60 COMMENT '无评价时的默认评分得分',
   `reassign_limit`        INT NOT NULL DEFAULT 2 COMMENT '自动改派次数上限',
   `reassign_hours`        INT NOT NULL DEFAULT 48 COMMENT '处理中超时改派阈值(小时)',
-  `top_n`                 INT NOT NULL DEFAULT 5 COMMENT '得分明细存档条数',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB COMMENT='智能派单规则(单行)';
 
@@ -242,9 +238,9 @@ INSERT INTO `notice` (`title`,`content`,`admin_id`) VALUES
 
 -- 派单规则默认配置(单行)
 INSERT INTO `dispatch_rule`
-  (`auto_dispatch_enabled`,`w_load`,`w_rating`,`w_familiarity`,`urgency_boost`,`max_load`,`familiarity_full`,`default_rating`,`reassign_limit`,`reassign_hours`,`top_n`)
+  (`auto_dispatch_enabled`,`w_load`,`w_rating`,`w_familiarity`,`urgency_boost`,`max_load`,`familiarity_full`,`default_rating`,`reassign_limit`,`reassign_hours`)
 VALUES
-  (1, 0.40, 0.35, 0.25, 0.50, 5, 5, 0.60, 2, 48, 5);
+  (1, 0.40, 0.35, 0.25, 0.50, 5, 5, 0.60, 2, 48);
 
 -- 维修工技能标签
 --   lisi(ID3)   : 水电/门禁/公共照明
@@ -252,10 +248,10 @@ VALUES
 --   zhoulei(ID7)  : 网络故障(仅此一项, 网络类工单只有他能被自动派到)
 --   qiancheng(ID8): 水电/门窗(与李师傅、王师傅形成技能重叠, 演示竞争派单与负荷均衡)
 INSERT INTO `worker_skill` (`worker_id`, `type_id`) VALUES
-(3, 1), (3, 4), (3, 5),
+(3, 1), (3, 4), (3, 5), (3, 6),
 (4, 2), (4, 3), (4, 6),
 (7, 7),
-(8, 1), (8, 2);
+(8, 1), (8, 2), (8, 6);
 
 -- 知识库FAQ示例(分类与报修类型名称对应)
 INSERT INTO `faq` (`category`, `title`, `content`, `sort`, `admin_id`) VALUES

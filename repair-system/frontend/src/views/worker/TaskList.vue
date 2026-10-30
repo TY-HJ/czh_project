@@ -56,9 +56,23 @@
   <order-detail-dialog ref="detailRef" />
 
   <!-- 完成维修对话框 -->
-  <el-dialog v-model="finishVisible" title="填写处理说明" width="440px">
-    <el-input v-model="finishNote" type="textarea" :rows="4"
-              placeholder="描述维修内容,如:更换了阀芯,已测试正常" />
+  <el-dialog v-model="finishVisible" title="填写维修说明" width="580px" top="8vh">
+    <div class="sop-tip">
+      按实际情况勾选，会自动拼成一句处理说明；生成后仍可继续手动补充
+    </div>
+    <div v-for="g in sopGroups" :key="g.key" class="sop-row">
+      <div class="sop-name">{{ g.label }}</div>
+      <el-checkbox-group v-model="sop[g.key]" class="sop-opts">
+        <el-checkbox v-for="o in g.options" :key="o" :value="o">{{ o }}</el-checkbox>
+      </el-checkbox-group>
+    </div>
+    <el-input v-model="finishNote" type="textarea" :rows="4" maxlength="300" show-word-limit
+              placeholder="也可以直接手写，如：更换了阀芯，已测试正常"
+              @input="undoNote = null" />
+    <div v-if="undoNote" class="undo-bar">
+      <span>已按勾选重写说明，你刚写的内容已暂存</span>
+      <el-button link type="primary" size="small" @click="undoNoteRestore">撤销</el-button>
+    </div>
     <template #footer>
       <el-button @click="finishVisible = false">取消</el-button>
       <el-button type="primary" @click="submitFinish">确认完成</el-button>
@@ -79,12 +93,13 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 import StatusTag from '../../components/StatusTag.vue'
 import OrderDetailDialog from '../../components/OrderDetailDialog.vue'
 import { getWorkerOrders, finishOrder, acceptTask, refuseOrder } from '../../api/order'
+import { getFinishOptions, buildFinishNote } from '../../utils/suggest'
 
 const detailRef = ref()
 const list = ref([])
@@ -93,7 +108,38 @@ const query = reactive({ status: null, current: 1, size: 10 })
 
 const finishVisible = ref(false)
 const finishOrderId = ref(null)
+const finishTypeName = ref('')
 const finishNote = ref('')
+
+// ===== 辅助填写：勾选原因/处理/结果，自动拼成处理说明（本地词库，不调用任何接口） =====
+const sop = reactive({ causes: [], actions: [], checks: [] })
+const autoNote = ref('')
+// 勾选重写前暂存师傅写过的内容，供撤销
+const undoNote = ref(null)
+const sopGroups = computed(() => {
+  const lib = getFinishOptions(finishTypeName.value)
+  return [
+    { key: 'causes', label: '故障原因', options: lib.causes },
+    { key: 'actions', label: '处理方式', options: lib.actions },
+    { key: 'checks', label: '结果确认', options: lib.checks }
+  ]
+})
+
+// 勾选变化即重算；若已手写过，先把原内容存起来，可点「撤销」找回
+watch(sop, () => {
+  if (!finishVisible.value) return
+  if (finishNote.value && finishNote.value !== autoNote.value) {
+    undoNote.value = finishNote.value
+  }
+  autoNote.value = buildFinishNote(sop)
+  finishNote.value = autoNote.value
+}, { deep: true })
+
+function undoNoteRestore() {
+  finishNote.value = undoNote.value
+  autoNote.value = ''
+  undoNote.value = null
+}
 
 const refuseVisible = ref(false)
 const refuseOrderId = ref(null)
@@ -143,6 +189,12 @@ async function submitRefuse() {
 
 function openFinish(row) {
   finishOrderId.value = row.id
+  finishTypeName.value = row.typeName || ''
+  sop.causes = []
+  sop.actions = []
+  sop.checks = []
+  autoNote.value = ''
+  undoNote.value = null
   finishNote.value = ''
   finishVisible.value = true
 }
@@ -160,3 +212,46 @@ async function submitFinish() {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.sop-tip {
+  margin-bottom: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #909399;
+}
+
+.undo-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.sop-row {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+
+.sop-name {
+  flex: none;
+  width: 70px;
+  font-size: 13px;
+  line-height: 32px;
+  color: #606266;
+}
+
+.sop-opts {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.sop-opts :deep(.el-checkbox) {
+  height: 32px;
+  margin-right: 16px;
+}
+</style>

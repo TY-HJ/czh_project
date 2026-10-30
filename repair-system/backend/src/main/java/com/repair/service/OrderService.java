@@ -105,7 +105,7 @@ public class OrderService {
 
     // ==================== 管理员:派单/改派(记 MANUAL) ====================
     @Transactional
-    public void assign(Long orderId, Long adminId, Long workerId) {
+    public void assign(Long orderId, Long adminId, Long workerId, Boolean force) {
         RepairOrder order = getOrder(orderId);
         // 待派单 -> 派单; 处理中 -> 改派(换人换师傅, 超时重新计时)
         boolean reassign = order.getStatus() == RepairOrder.STATUS_PROCESSING;
@@ -124,13 +124,20 @@ public class OrderService {
             throw new BusinessException("该维修工已被禁用,无法派单,请先在用户管理中启用");
         }
         // 技能校验: 与自动派单同一口径, 避免把单派给不处理该类故障的师傅
+        // 但人工派单保留"强制派出"的口子: 某类型只有一人会修、他又休假/被禁用时,
+        // 若一律拦死会导致该类型工单永久卡在待派单, 所以确认后允许放行并留痕
+        String forceNote = "";
         Long skillCount = workerSkillMapper.selectCount(new LambdaQueryWrapper<WorkerSkill>()
                 .eq(WorkerSkill::getWorkerId, workerId)
                 .eq(WorkerSkill::getTypeId, order.getTypeId()));
         if (skillCount == null || skillCount == 0) {
             RepairType type = typeMapper.selectById(order.getTypeId());
             String typeName = type == null ? "该类型" : "「" + type.getTypeName() + "」";
-            throw new BusinessException("该师傅未配置" + typeName + "技能,请先在用户管理-技能中补充后派单");
+            if (!Boolean.TRUE.equals(force)) {
+                throw new BusinessException(4001,
+                        "该师傅未配置" + typeName + "技能,仍要派给他吗?");
+            }
+            forceNote = "(强制派单:该师傅未配置" + typeName + "技能)";
         }
         Long oldWorkerId = order.getWorkerId();
         if (reassign && workerId.equals(oldWorkerId)) {
@@ -161,13 +168,14 @@ public class OrderService {
 
         if (reassign) {
             String oldName = oldWorkerId == null ? "原维修工" : realNameOf(oldWorkerId);
-            addLog(orderId, adminId, OrderLog.ACTION_REASSIGN, "管理员改派: " + oldName + " → " + worker.getRealName());
+            addLog(orderId, adminId, OrderLog.ACTION_REASSIGN,
+                    "管理员改派: " + oldName + " → " + worker.getRealName() + forceNote);
             if (oldWorkerId != null && !oldWorkerId.equals(workerId)) {
                 sendMessage(oldWorkerId, "工单【" + order.getOrderNo() + "】已被管理员改派给其他师傅,您无需再处理");
             }
             sendMessage(order.getUserId(), "您的报修【" + order.getOrderNo() + "】已改派给" + worker.getRealName() + ",请等待接单");
         } else {
-            addLog(orderId, adminId, OrderLog.ACTION_ASSIGN, "派单给 " + worker.getRealName());
+            addLog(orderId, adminId, OrderLog.ACTION_ASSIGN, "派单给 " + worker.getRealName() + forceNote);
         }
         sendMessage(workerId, "您有新的维修任务【" + order.getOrderNo() + "】" + order.getTitle() + ",请及时接单处理");
     }

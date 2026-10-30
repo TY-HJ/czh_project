@@ -12,6 +12,7 @@
             <el-radio-button :value="1">已读</el-radio-button>
           </el-radio-group>
           <el-button size="small" @click="readAll">全部标记已读</el-button>
+          <el-button size="small" type="danger" plain @click="clearRead">清空已读</el-button>
         </div>
       </div>
     </template>
@@ -29,6 +30,7 @@
         </el-tag>
       </span>
       <span class="time">{{ msg.createTime }}</span>
+      <el-icon class="del" title="删除这条消息" @click.stop="remove(msg)"><Delete /></el-icon>
     </div>
 
     <el-pagination v-if="total > query.size" style="margin-top: 16px; justify-content: flex-end"
@@ -43,7 +45,11 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { getMessages, readAllMessages, readMessage, getUnreadCount } from '../../api/common'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  getMessages, readAllMessages, readMessage, getUnreadCount,
+  deleteMessage, clearReadMessages
+} from '../../api/common'
 import OrderDetailDialog from '../../components/OrderDetailDialog.vue'
 import MessageDetailDialog from '../../components/MessageDetailDialog.vue'
 
@@ -94,6 +100,34 @@ async function readAll() {
   refreshUnread()
 }
 
+/** 删除单条: 消息不是业务数据, 不弹确认, 删错了也无所谓 */
+async function remove(msg) {
+  await deleteMessage(msg.id)
+  // 删的是本页最后一条且不在第一页时, 回到上一页, 避免停在空页
+  if (list.value.length === 1 && query.current > 1) {
+    query.current -= 1
+  }
+  await load()
+  refreshUnread()
+  ElMessage.success('已删除')
+}
+
+/** 清空已读: 批量操作, 弹一次确认; 未读消息保留 */
+async function clearRead() {
+  try {
+    await ElMessageBox.confirm('将删除所有已读消息，未读消息会保留。', '清空已读', {
+      type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消'
+    })
+  } catch (e) {
+    return
+  }
+  const count = await clearReadMessages()
+  ElMessage.success(count > 0 ? `已清除 ${count} 条已读消息` : '没有可清除的已读消息')
+  query.current = 1
+  await load()
+  refreshUnread()
+}
+
 onMounted(() => {
   load()
   refreshUnread()
@@ -113,4 +147,6 @@ onMounted(() => {
 .msg-item.unread .content { font-weight: bold; }
 .content { flex: 1; font-size: 14px; }
 .time { color: #999; font-size: 12px; }
+.del { color: #c0c4cc; font-size: 16px; cursor: pointer; }
+.del:hover { color: #f56c6c; }
 </style>

@@ -47,13 +47,14 @@ const typeChart = ref()
 const trendChart = ref()
 const rankChart = ref()
 
+// 五张状态卡片之和 = 工单总数; 平均时长放在右侧说明卡片, 不占卡片位
 const cards = computed(() => [
   { label: '工单总数', value: overview.value.total ?? 0, color: '#303133', status: null },
   { label: '待派单', value: overview.value.pendingDispatch ?? 0, color: '#E6A23C', status: 0 },
   { label: '处理中', value: overview.value.processing ?? 0, color: '#409EFF', status: 1 },
   { label: '待验收', value: overview.value.pendingAcceptance ?? 0, color: '#909399', status: 2 },
   { label: '已完成', value: overview.value.completed ?? 0, color: '#67C23A', status: 3 },
-  { label: '平均时长(时)', value: overview.value.avgDurationHours ?? 0, color: '#F56C6C' }
+  { label: '已关闭', value: overview.value.closed ?? 0, color: '#BFBFBF', status: 4 }
 ])
 
 function renderTypeChart(data) {
